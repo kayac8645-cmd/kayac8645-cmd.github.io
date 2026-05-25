@@ -1,0 +1,1159 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Aura AI ULTRA V7</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.4.1/math.min.js"></script>
+
+<style>
+
+*{
+margin:0;
+padding:0;
+box-sizing:border-box;
+font-family:'Inter',sans-serif;
+}
+
+body{
+background:#050816;
+color:white;
+overflow:hidden;
+}
+
+/* BACKGROUND */
+
+body::before{
+content:"";
+position:fixed;
+width:100%;
+height:100%;
+background:
+radial-gradient(circle at top left,#102040,#050816 40%),
+radial-gradient(circle at bottom right,#201040,#050816 40%);
+z-index:-3;
+}
+
+body::after{
+content:"";
+position:fixed;
+width:100%;
+height:100%;
+background-image:
+linear-gradient(rgba(255,255,255,0.02) 1px,transparent 1px),
+linear-gradient(90deg,rgba(255,255,255,0.02) 1px,transparent 1px);
+background-size:40px 40px;
+z-index:-2;
+}
+
+/* APP */
+
+.app{
+display:flex;
+height:100vh;
+width:100%;
+}
+
+/* SIDEBAR */
+
+.sidebar{
+width:300px;
+background:rgba(255,255,255,0.03);
+border-right:1px solid rgba(255,255,255,0.06);
+backdrop-filter:blur(30px);
+padding:18px;
+overflow:auto;
+transition:0.4s;
+}
+
+.logo{
+display:flex;
+align-items:center;
+gap:12px;
+margin-bottom:24px;
+}
+
+.logo-circle{
+width:22px;
+height:22px;
+border-radius:50%;
+background:linear-gradient(135deg,#00c6ff,#7f5af0,#ff5ea8);
+box-shadow:0 0 35px rgba(127,90,240,0.8);
+animation:pulse 2s infinite;
+}
+
+.logo-text{
+font-size:30px;
+font-weight:800;
+}
+
+.new-chat{
+width:100%;
+padding:16px;
+border:none;
+border-radius:18px;
+background:linear-gradient(135deg,#7f5af0,#00c6ff);
+color:white;
+font-weight:700;
+cursor:pointer;
+margin-bottom:25px;
+transition:0.3s;
+}
+
+.new-chat:hover{
+transform:translateY(-2px);
+}
+
+.section-title{
+font-size:11px;
+letter-spacing:2px;
+color:#777;
+margin:18px 0 12px;
+}
+
+.card{
+padding:16px;
+border-radius:18px;
+background:rgba(255,255,255,0.03);
+margin-bottom:12px;
+cursor:pointer;
+transition:0.3s;
+border:1px solid transparent;
+}
+
+.card:hover{
+background:rgba(255,255,255,0.07);
+border-color:#7f5af0;
+}
+
+.card.active{
+border-color:#00c6ff;
+box-shadow:0 0 25px rgba(0,198,255,0.2);
+}
+
+.card-title{
+font-weight:700;
+margin-bottom:5px;
+}
+
+.card-sub{
+font-size:13px;
+color:#999;
+}
+
+.history-item{
+padding:12px;
+border-radius:14px;
+background:rgba(255,255,255,0.03);
+margin-bottom:10px;
+cursor:pointer;
+transition:0.3s;
+font-size:14px;
+color:#ccc;
+}
+
+.history-item:hover{
+background:rgba(255,255,255,0.07);
+}
+
+/* MAIN */
+
+.main{
+flex:1;
+display:flex;
+flex-direction:column;
+}
+
+/* TOPBAR */
+
+.topbar{
+height:72px;
+display:flex;
+align-items:center;
+justify-content:space-between;
+padding:0 22px;
+border-bottom:1px solid rgba(255,255,255,0.06);
+background:rgba(255,255,255,0.02);
+backdrop-filter:blur(20px);
+}
+
+.top-left{
+display:flex;
+align-items:center;
+gap:14px;
+}
+
+.menu{
+font-size:24px;
+cursor:pointer;
+display:none;
+}
+
+.chat-title{
+font-size:20px;
+font-weight:700;
+}
+
+.chat-sub{
+font-size:12px;
+color:#888;
+}
+
+.status{
+padding:8px 14px;
+border-radius:999px;
+background:rgba(0,255,170,0.12);
+color:#00ffb3;
+font-size:12px;
+font-weight:700;
+}
+
+/* CHAT */
+
+.chat{
+flex:1;
+overflow-y:auto;
+padding:30px;
+display:flex;
+flex-direction:column;
+gap:20px;
+scroll-behavior:smooth;
+}
+
+/* HERO */
+
+.hero{
+margin:auto;
+text-align:center;
+max-width:900px;
+padding:20px;
+}
+
+.hero-logo{
+width:120px;
+height:120px;
+border-radius:50%;
+margin:auto;
+margin-bottom:28px;
+background:linear-gradient(135deg,#00c6ff,#7f5af0,#ff5ea8);
+display:flex;
+align-items:center;
+justify-content:center;
+font-size:44px;
+font-weight:800;
+box-shadow:0 0 80px rgba(127,90,240,0.7);
+animation:pulse 3s infinite;
+}
+
+.hero h1{
+font-size:58px;
+margin-bottom:18px;
+font-weight:800;
+}
+
+.hero p{
+font-size:18px;
+line-height:1.8;
+color:#999;
+}
+
+/* MESSAGE */
+
+.message{
+max-width:950px;
+width:100%;
+padding:24px;
+border-radius:28px;
+line-height:1.9;
+animation:fadeUp 0.3s ease;
+word-wrap:break-word;
+}
+
+.user{
+align-self:flex-end;
+max-width:650px;
+background:linear-gradient(135deg,#2563eb,#00c6ff);
+}
+
+.ai{
+align-self:flex-start;
+background:rgba(255,255,255,0.04);
+border:1px solid rgba(255,255,255,0.06);
+backdrop-filter:blur(20px);
+}
+
+.message pre{
+background:#0b1020;
+padding:18px;
+border-radius:18px;
+overflow:auto;
+margin-top:15px;
+}
+
+.message code{
+color:#00ff88;
+font-family:monospace;
+}
+
+/* THINKING */
+
+.thinking{
+display:flex;
+align-items:center;
+gap:10px;
+padding:12px;
+color:#aaa;
+}
+
+.dot{
+width:10px;
+height:10px;
+border-radius:50%;
+background:white;
+animation:bounce 1s infinite;
+}
+
+.dot:nth-child(2){
+animation-delay:0.2s;
+}
+
+.dot:nth-child(3){
+animation-delay:0.4s;
+}
+
+/* INPUT */
+
+.input-wrap{
+padding:18px;
+border-top:1px solid rgba(255,255,255,0.06);
+background:rgba(255,255,255,0.02);
+backdrop-filter:blur(20px);
+}
+
+.tools{
+display:flex;
+gap:10px;
+flex-wrap:wrap;
+margin-bottom:14px;
+}
+
+.tools button{
+padding:10px 14px;
+border:none;
+border-radius:14px;
+background:rgba(255,255,255,0.05);
+color:white;
+cursor:pointer;
+transition:0.3s;
+}
+
+.tools button:hover{
+background:rgba(255,255,255,0.1);
+}
+
+.input-box{
+display:flex;
+align-items:flex-end;
+gap:14px;
+padding:16px;
+border-radius:28px;
+background:rgba(255,255,255,0.05);
+border:1px solid rgba(255,255,255,0.06);
+}
+
+#input{
+flex:1;
+background:none;
+border:none;
+outline:none;
+resize:none;
+min-height:70px;
+max-height:180px;
+font-size:16px;
+color:white;
+overflow:auto;
+}
+
+.actions{
+display:flex;
+gap:10px;
+}
+
+.actions button{
+width:55px;
+height:55px;
+border:none;
+border-radius:18px;
+cursor:pointer;
+font-size:20px;
+color:white;
+transition:0.3s;
+background:rgba(255,255,255,0.08);
+}
+
+.actions button:hover{
+transform:scale(1.08);
+}
+
+.send{
+background:linear-gradient(135deg,#7f5af0,#00c6ff)!important;
+}
+
+/* PREVIEW */
+
+.preview{
+position:fixed;
+right:-50%;
+top:0;
+width:50%;
+height:100%;
+background:#0b1020;
+border-left:1px solid rgba(255,255,255,0.05);
+transition:0.4s;
+z-index:999;
+padding:20px;
+}
+
+.preview.active{
+right:0;
+}
+
+.preview iframe{
+width:100%;
+height:100%;
+border:none;
+border-radius:18px;
+background:white;
+}
+
+/* ANIMATIONS */
+
+@keyframes fadeUp{
+from{
+opacity:0;
+transform:translateY(20px);
+}
+to{
+opacity:1;
+transform:translateY(0);
+}
+}
+
+@keyframes bounce{
+0%,100%{
+transform:translateY(0);
+opacity:0.5;
+}
+50%{
+transform:translateY(-6px);
+opacity:1;
+}
+}
+
+@keyframes pulse{
+0%,100%{
+transform:scale(1);
+}
+50%{
+transform:scale(1.05);
+}
+}
+
+/* MOBILE */
+
+@media(max-width:900px){
+
+.sidebar{
+position:fixed;
+left:-320px;
+top:0;
+height:100%;
+z-index:999;
+}
+
+.sidebar.show{
+left:0;
+}
+
+.menu{
+display:block;
+}
+
+.hero h1{
+font-size:38px;
+}
+
+.preview{
+width:100%;
+right:-100%;
+}
+
+.message{
+max-width:100%;
+}
+
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="app">
+
+<!-- SIDEBAR -->
+
+<div class="sidebar" id="sidebar">
+
+<div class="logo">
+<div class="logo-circle"></div>
+<div class="logo-text">Aura AI</div>
+</div>
+
+<button class="new-chat" onclick="newChat()">
+＋ Yeni Sohbet
+</button>
+
+<div class="section-title">MODLAR</div>
+
+<div class="card active">
+<div class="card-title">⚡ Hızlı</div>
+<div class="card-sub">Ultra hızlı cevap</div>
+</div>
+
+<div class="card">
+<div class="card-title">🧠 Düşünen</div>
+<div class="card-sub">Reasoning sistemi</div>
+</div>
+
+<div class="card">
+<div class="card-title">💎 Pro</div>
+<div class="card-sub">Premium analiz</div>
+</div>
+
+<div class="section-title">ARAÇLAR</div>
+
+<div class="card">🌐 Web Search</div>
+<div class="card">💻 Kod Sandbox</div>
+<div class="card">📷 Görsel Üret</div>
+<div class="card">📊 Matematik</div>
+<div class="card">🎤 Voice AI</div>
+
+<div class="section-title">GEÇMİŞ</div>
+
+<div id="history"></div>
+
+</div>
+
+<!-- MAIN -->
+
+<div class="main">
+
+<div class="topbar">
+
+<div class="top-left">
+
+<div class="menu" onclick="toggleSidebar()">
+☰
+</div>
+
+<div>
+<div class="chat-title">Aura AI ULTRA V7</div>
+<div class="chat-sub">aura-reasoning-engine</div>
+</div>
+
+</div>
+
+<div class="status">
+⚡ ONLINE
+</div>
+
+</div>
+
+<!-- CHAT -->
+
+<div class="chat" id="chat">
+
+<div class="hero" id="hero">
+
+<div class="hero-logo">
+A
+</div>
+
+<h1>Merhaba, Ben Aura ✦</h1>
+
+<p>
+Claude tarzı premium AI deneyimi.
+Web araştırması yapabilir,
+telefonları analiz edebilir,
+matematik çözebilir ve
+YouTube önerileri sunabilir.
+</p>
+
+</div>
+
+</div>
+
+<!-- INPUT -->
+
+<div class="input-wrap">
+
+<div class="tools">
+
+<button onclick="generateImage()">
+📷 Görsel
+</button>
+
+<button onclick="startVoice()">
+🎤 Ses
+</button>
+
+<button onclick="togglePreview()">
+💻 Preview
+</button>
+
+<button onclick="insertMath()">
+📊 Matematik
+</button>
+
+<button onclick="webSearchBtn()">
+🌐 Web
+</button>
+
+</div>
+
+<div class="input-box">
+
+<textarea
+id="input"
+placeholder="Aura’ya sor..."
+></textarea>
+
+<div class="actions">
+
+<button onclick="speakLast()">
+🔊
+</button>
+
+<button class="send" onclick="sendMessage()">
+➤
+</button>
+
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+<!-- PREVIEW -->
+
+<div class="preview" id="preview">
+<iframe id="frame"></iframe>
+</div>
+
+</div>
+
+<script>
+
+const chat=document.getElementById("chat");
+const input=document.getElementById("input");
+const historyDiv=document.getElementById("history");
+
+let lastAIMessage="";
+
+/* SIDEBAR */
+
+function toggleSidebar(){
+
+document
+.getElementById("sidebar")
+.classList.toggle("show");
+
+}
+
+/* INPUT */
+
+input.addEventListener("keydown",(e)=>{
+
+if(e.key==="Enter"&&!e.shiftKey){
+
+e.preventDefault();
+
+sendMessage();
+
+}
+
+});
+
+input.addEventListener("input",()=>{
+
+input.style.height="auto";
+input.style.height=input.scrollHeight+"px";
+
+});
+
+/* NEW CHAT */
+
+function newChat(){
+
+location.reload();
+
+}
+
+/* HISTORY */
+
+function saveHistory(text){
+
+const item=document.createElement("div");
+
+item.className="history-item";
+
+item.innerText=text.slice(0,40);
+
+historyDiv.prepend(item);
+
+}
+
+/* ADD MESSAGE */
+
+function addMessage(text,type){
+
+const div=document.createElement("div");
+
+div.className=`message ${type}`;
+
+div.innerHTML=marked.parse(text);
+
+chat.appendChild(div);
+
+chat.scrollTop=chat.scrollHeight;
+
+}
+
+/* THINKING */
+
+function showThinking(){
+
+const div=document.createElement("div");
+
+div.className="thinking";
+
+div.id="thinking";
+
+div.innerHTML=`
+
+<div class="dot"></div>
+<div class="dot"></div>
+<div class="dot"></div>
+
+<span>
+Aura düşünüyor...
+Web taranıyor...
+Analiz yapılıyor...
+</span>
+
+`;
+
+chat.appendChild(div);
+
+chat.scrollTop=chat.scrollHeight;
+
+}
+
+function removeThinking(){
+
+const t=document.getElementById("thinking");
+
+if(t)t.remove();
+
+}
+
+/* TYPE EFFECT */
+
+function typeMessage(text){
+
+lastAIMessage=text;
+
+const div=document.createElement("div");
+
+div.className="message ai";
+
+chat.appendChild(div);
+
+let i=0;
+
+const interval=setInterval(()=>{
+
+div.innerHTML=
+marked.parse(text.substring(0,i));
+
+i++;
+
+chat.scrollTop=chat.scrollHeight;
+
+if(i>text.length){
+
+clearInterval(interval);
+
+}
+
+},5);
+
+}
+
+/* WEB SEARCH */
+
+async function webSearch(query){
+
+try{
+
+const url=
+`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&pretty=1`;
+
+const res=await fetch(url);
+
+const data=await res.json();
+
+return data;
+
+}catch{
+
+return null;
+
+}
+
+}
+
+/* YOUTUBE */
+
+function youtubeLinks(query){
+
+const q=encodeURIComponent(query);
+
+return [
+
+`https://www.youtube.com/results?search_query=${q}+inceleme`,
+`https://www.youtube.com/results?search_query=${q}+review`,
+`https://www.youtube.com/results?search_query=${q}+karşılaştırma`
+
+];
+
+}
+
+/* AI ENGINE */
+
+async function generateAI(text){
+
+const t=text.toLowerCase();
+
+const phoneBrands=[
+
+"iphone",
+"samsung",
+"xiaomi",
+"redmi",
+"poco",
+"oppo",
+"vivo",
+"realme",
+"huawei",
+"honor",
+"oneplus",
+"nothing",
+"pixel"
+
+];
+
+const isPhone=
+phoneBrands.some(b=>t.includes(b));
+
+/* PHONE */
+
+if(isPhone){
+
+const web=await webSearch(text);
+
+const yt=youtubeLinks(text);
+
+return `
+
+# 📱 ${text}
+
+## Web Araştırması
+
+${web?.AbstractText || "Telefon hakkında detaylı bilgiler analiz edildi."}
+
+---
+
+## Analiz
+
+- ⚡ Performans incelendi
+- 📱 Ekran değerlendirildi
+- 🔋 Batarya araştırıldı
+- 📸 Kamera sistemi analiz edildi
+- 🎮 Oyun performansı incelendi
+
+---
+
+## YouTube Önerileri
+
+▶ İnceleme  
+${yt[0]}
+
+▶ Review  
+${yt[1]}
+
+▶ Karşılaştırma  
+${yt[2]}
+
+---
+
+## Aura Yorumu
+
+Bu cihaz detaylı şekilde analiz edildi.
+İstersen:
+- FPS testi
+- rakip kıyaslaması
+- kamera karşılaştırması
+- işlemci analizi
+
+yapabilirim.
+
+`;
+
+}
+
+/* MATH */
+
+if(/[0-9+\-*/()]/.test(t)){
+
+try{
+
+const clean=
+t.replace(/[^0-9+\-*/().]/g,"");
+
+const result=
+math.evaluate(clean);
+
+return `
+
+# 📊 Matematik Sonucu
+
+\`\`\`
+${clean} = ${result}
+\`\`\`
+
+✔ İşlem başarıyla çözüldü.
+
+`;
+
+}catch{}
+
+}
+
+/* CODE */
+
+if(
+t.includes("kod")||
+t.includes("html")||
+t.includes("javascript")
+){
+
+togglePreview();
+
+const code=`
+<!DOCTYPE html>
+<html>
+<body style="background:black;color:white;display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif;">
+<h1>Aura AI Live Preview</h1>
+</body>
+</html>
+`;
+
+document.getElementById("frame").srcdoc=code;
+
+return `
+
+# 💻 Kod Sistemi
+
+\`\`\`html
+${code}
+\`\`\`
+
+Kod preview panelinde çalıştırıldı.
+
+`;
+
+}
+
+/* GENERAL */
+
+const web=await webSearch(text);
+
+const yt=youtubeLinks(text);
+
+return `
+
+# 🌐 Aura AI Web Analizi
+
+## Kullanıcı Sorusu
+
+> ${text}
+
+---
+
+## Web Sonuçları
+
+${web?.AbstractText || "Web üzerinde ilgili bilgiler analiz edildi."}
+
+---
+
+## YouTube Önerileri
+
+▶ Video Ara  
+${yt[0]}
+
+▶ Eğitim Videosu  
+${yt[1]}
+
+▶ Detaylı Anlatım  
+${yt[2]}
+
+---
+
+## Aura Yorumu
+
+Bu konuda:
+- araştırma
+- teknik analiz
+- karşılaştırma
+- özet çıkarma
+
+yapabilirim.
+
+`;
+
+}
+
+/* SEND */
+
+async function sendMessage(){
+
+const text=input.value.trim();
+
+if(!text)return;
+
+const hero=document.getElementById("hero");
+
+if(hero)hero.remove();
+
+addMessage(text,"user");
+
+saveHistory(text);
+
+input.value="";
+input.style.height="70px";
+
+showThinking();
+
+const response=
+await generateAI(text);
+
+removeThinking();
+
+typeMessage(response);
+
+}
+
+/* PREVIEW */
+
+function togglePreview(){
+
+document
+.getElementById("preview")
+.classList.toggle("active");
+
+}
+
+/* VOICE */
+
+function startVoice(){
+
+if(!("webkitSpeechRecognition" in window)){
+
+alert("Tarayıcı desteklemiyor.");
+
+return;
+
+}
+
+const recognition=
+new webkitSpeechRecognition();
+
+recognition.lang="tr-TR";
+
+recognition.start();
+
+recognition.onresult=(e)=>{
+
+input.value=
+e.results[0][0].transcript;
+
+};
+
+}
+
+/* SPEAK */
+
+function speakLast(){
+
+const speech=
+new SpeechSynthesisUtterance(lastAIMessage);
+
+speech.lang="tr-TR";
+
+speechSynthesis.speak(speech);
+
+}
+
+/* IMAGE */
+
+function generateImage(){
+
+window.open(
+"https://image.pollinations.ai/prompt/cyberpunk%20ai",
+"_blank"
+);
+
+}
+
+/* WEB */
+
+function webSearchBtn(){
+
+window.open(
+"https://www.google.com",
+"_blank"
+);
+
+}
+
+/* INSERT MATH */
+
+function insertMath(){
+
+input.value+=" 777+333 ";
+
+}
+
+</script>
+
+</body>
+</html>
