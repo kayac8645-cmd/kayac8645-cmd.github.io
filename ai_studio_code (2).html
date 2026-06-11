@@ -33,10 +33,10 @@
             flex-direction: column;
             align-items: center;
             min-height: 100vh;
-            padding-bottom: 70px; /* Admob alanı için boşluk */
+            padding-bottom: 70px; /* Admob alanı boşluğu */
         }
 
-        /* Oyun Konteyneri */
+        /* Oyun Konteyneri (Başlangıçta Gizli) */
         .game-container {
             width: 100%;
             max-width: 500px;
@@ -387,10 +387,11 @@
 </head>
 <body>
 
-    <div class="game-container">
+    <!-- game-container başlangıçta gizli tutuluyor -->
+    <div class="game-container hidden">
         
-        <!-- Ekran 1: Evren Seçimi -->
-        <div id="universe-screen" class="screen">
+        <!-- Ekran 1: Evren Seçimi (hidden sınıfına sahip değil, ilk bu ekran açılacak) -->
+        <div id="screen-universe-select" class="screen">
             <h1>HAYATTA KALMA OYUNU</h1>
             <p class="subtitle">Kaderini belirleyeceğin evreni seçerek maceraya başla:</p>
             <button class="btn" onclick="startUniverse('zombie')">🧟 Zombi Kıyameti</button>
@@ -398,7 +399,7 @@
             <button class="btn" style="border-color: var(--accent-yellow); color: var(--accent-yellow);" onmouseover="this.style.backgroundColor='var(--accent-yellow)'; this.style.color='var(--bg-color)'" onmouseout="this.style.backgroundColor='transparent'; this.style.color='var(--accent-yellow)'" onclick="startUniverse('island')">🏝️ Issız Ada</button>
         </div>
 
-        <!-- Ekran 2: Ana Oyun Ekranı -->
+        <!-- Ekran 2: Ana Oyun Ekranı (hidden olarak başlar) -->
         <div id="game-screen" class="screen hidden">
             <!-- Üst Bilgiler -->
             <div class="top-row">
@@ -458,7 +459,7 @@
             </div>
         </div>
 
-        <!-- Ekran 3: Ölüm Ekranı -->
+        <!-- Ekran 3: Ölüm Ekranı (hidden olarak başlar) -->
         <div id="death-screen" class="screen hidden">
             <h1 class="death-title">HAYATTA KALAMADINIZ!</h1>
             <p id="death-cause" class="cause-text">Ölüm sebebi.</p>
@@ -732,11 +733,17 @@
 
         // --- EKRAN GEÇİŞ YÖNETİMİ ---
         function showScreen(screenId) {
-            document.getElementById('universe-screen').classList.add('hidden');
+            document.getElementById('screen-universe-select').classList.add('hidden');
             document.getElementById('game-screen').classList.add('hidden');
             document.getElementById('death-screen').classList.add('hidden');
 
             document.getElementById(screenId).classList.remove('hidden');
+        }
+
+        // --- EVREN SEÇİM EKRANINI GÖSTERME (AÇILIŞ DÜZELTMESİ) ---
+        function showUniverseSelect() {
+            document.querySelector('.game-container').classList.remove('hidden');
+            showScreen('screen-universe-select');
         }
 
         // --- RASTGELE OLAY SEÇİCİ ---
@@ -839,7 +846,7 @@
         // --- AKSİYON BİLDİRİM KAYDI (LOG) ---
         function showActionLog(text, type) {
             const logEl = document.getElementById('action-log');
-            logEl.className = "action-log"; // Reset classes
+            logEl.className = "action-log"; // Sınıfları sıfırla
             logEl.classList.add(type);
             logEl.innerText = text;
             logEl.classList.remove('hidden');
@@ -1026,8 +1033,13 @@
         }
 
         function returnToMenu() {
-            showScreen('universe-screen');
+            showUniverseSelect();
         }
+
+        // --- BAŞLATMA MANTIĞI (AÇILIŞ HATASINI GİDEREN TETİKLEYİCİ) ---
+        window.onload = function() {
+            showUniverseSelect();
+        };
     </script>
 </body>
 </html>
