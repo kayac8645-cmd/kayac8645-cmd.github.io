@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hayatta Kalma Oyunu (Survival)</title>
+    <style>
+        /* Modern Karanlık Tema Değişkenleri */
+        :root {
+            --bg-color: #090d16;
+            --card-bg: #111827;
+            --border-color: #1f2937;
+            --text-primary: #f9fafb;
+            --text-secondary: #9ca3af;
+            --accent-cyan: #06b6d4;
+            --accent-green: #10b981;
+            --accent-red: #ef4444;
+            --accent-yellow: #f59e0b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding-bottom: 70px; /* Admob alanı için boşluk */
+        }
+
+        /* Oyun Konteyneri */
+        .game-container {
+            width: 100%;
+            max-width: 500px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-height: calc(100vh - 70px);
+        }
+
+        /* Ekran Yapıları */
+        .screen {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 28px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Başlıklar ve Metinler */
+        h1 {
+            font-size: 24px;
+            text-align: center;
+            color: var(--accent-cyan);
+            text-shadow: 0 0 10px rgba(6, 182, 212, 0.3);
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: var(--text-secondary);
+            text-align: center;
+            margin-bottom: 15px;
+        }
+
+        .story-box {
+            background-color: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            padding: 20px;
+            font-size: 15px;
+            line-height: 1.6;
+            color: var(--text-primary);
+            min-height: 120px;
+        }
+
+        /* Dinamik Barlar */
+        .stats-container {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .stat-bar-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .stat-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .bar-outer {
+            height: 12px;
+            background-color: #090d16;
+            border-radius: 6px;
+            overflow: hidden;
+            border: 1px solid #1f2937;
+        }
+
+        .bar-inner {
+            height: 100%;
+            width: 100%;
+            border-radius: 6px;
+            transition: width 0.4s ease;
+        }
+
+        /* Barların Özel Renkleri */
+        #bar-can .bar-inner {
+            background: linear-gradient(90deg, var(--accent-red), #ff6b6b);
+        }
+
+        #bar-aclik .bar-inner {
+            background: linear-gradient(90deg, var(--accent-yellow), #fbbf24);
+        }
+
+        #bar-special .bar-inner {
+            background: linear-gradient(90deg, var(--accent-cyan), var(--accent-green));
+        }
+
+        .day-counter {
+            font-size: 18px;
+            font-weight: bold;
+            text-align: center;
+            color: var(--accent-green);
+            background: rgba(16, 185, 129, 0.1);
+            padding: 8px;
+            border-radius: 8px;
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+
+        /* Buton Tasarımları */
+        .btn {
+            background: transparent;
+            border: 2px solid var(--accent-cyan);
+            color: var(--accent-cyan);
+            padding: 14px 20px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+            outline: none;
+        }
+
+        .btn:hover {
+            background-color: var(--accent-cyan);
+            color: var(--bg-color);
+            box-shadow: 0 0 15px rgba(6, 182, 212, 0.4);
+        }
+
+        .btn-green {
+            border-color: var(--accent-green);
+            color: var(--accent-green);
+        }
+
+        .btn-green:hover {
+            background-color: var(--accent-green);
+            color: var(--bg-color);
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
+        }
+
+        .btn-red {
+            border-color: var(--accent-red);
+            color: var(--accent-red);
+        }
+
+        .btn-red:hover {
+            background-color: var(--accent-red);
+            color: var(--bg-color);
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
+        }
+
+        .choice-btn-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        /* Ölüm ve Kazanç Ekranları */
+        .death-title {
+            color: var(--accent-red);
+            text-shadow: 0 0 10px rgba(239, 68, 68, 0.3);
+        }
+
+        .victory-title {
+            color: var(--accent-green);
+            text-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+        }
+
+        .cause-text {
+            color: var(--text-secondary);
+            text-align: center;
+            font-style: italic;
+        }
+
+        /* Ad Modal / Sahte Reklam */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(9, 13, 22, 0.95);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .ad-box {
+            background-color: var(--card-bg);
+            border: 2px dashed var(--accent-cyan);
+            border-radius: 16px;
+            padding: 40px;
+            text-align: center;
+            max-width: 320px;
+            width: 90%;
+            box-shadow: 0 0 30px rgba(6, 182, 212, 0.2);
+        }
+
+        .ad-countdown {
+            font-size: 48px;
+            font-weight: 800;
+            color: var(--accent-cyan);
+            margin: 20px 0;
+        }
+
+        /* Admob Banner */
+        .admob-banner {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 50px;
+            background-color: #070a10;
+            border-top: 1px solid var(--border-color);
+            color: #4b5563;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            z-index: 999;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="game-container">
+        
+        <!-- Ekran 1: Evren Seçimi -->
+        <div id="universe-screen" class="screen">
+            <h1>HAYATTA KALMA OYUNU</h1>
+            <p class="subtitle">Kaderini belirleyeceğin evreni seçerek maceraya başla:</p>
+            <button class="btn" onclick="startUniverse('zombie')">🧟 Zombi Kıyameti</button>
+            <button class="btn btn-green" onclick="startUniverse('cyberpunk')">🤖 Siberpunk İsyanı</button>
+            <button class="btn" style="border-color: var(--accent-yellow); color: var(--accent-yellow);" onmouseover="this.style.backgroundColor='var(--accent-yellow)'; this.style.color='var(--bg-color)'" onmouseout="this.style.backgroundColor='transparent'; this.style.color='var(--accent-yellow)'" onclick="startUniverse('island')">🏝️ Issız Ada</button>
+        </div>
+
+        <!-- Ekran 2: Ana Oyun Ekranı -->
+        <div id="game-screen" class="screen hidden">
+            <div id="day-counter" class="day-counter">GÜN: <span id="day-count">1</span></div>
+            
+            <!-- Durum Barları -->
+            <div class="stats-container">
+                <!-- Can -->
+                <div class="stat-bar-group">
+                    <div class="stat-labels">
+                        <span>Can</span>
+                        <span id="label-can">100%</span>
+                    </div>
+                    <div class="bar-outer" id="bar-can">
+                        <div class="bar-inner" style="width: 100%;"></div>
+                    </div>
+                </div>
+                <!-- Açlık -->
+                <div class="stat-bar-group">
+                    <div class="stat-labels">
+                        <span>Açlık</span>
+                        <span id="label-aclik">100%</span>
+                    </div>
+                    <div class="bar-outer" id="bar-aclik">
+                        <div class="bar-inner" style="width: 100%;"></div>
+                    </div>
+                </div>
+                <!-- Evrene Özel Değişken (Cephane, Enerji, Su) -->
+                <div class="stat-bar-group">
+                    <div class="stat-labels">
+                        <span id="label-special-name">Özel</span>
+                        <span id="label-special">100%</span>
+                    </div>
+                    <div class="bar-outer" id="bar-special">
+                        <div class="bar-inner" style="width: 100%;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hikaye Alanı -->
+            <div id="story-text" class="story-box">
+                Hikaye yükleniyor...
+            </div>
+
+            <!-- Seçim Butonları -->
+            <div class="choice-btn-container">
+                <button id="btn-choice-a" class="btn" onclick="makeChoice(0)">Seçenek A</button>
+                <button id="btn-choice-b" class="btn btn-green" onclick="makeChoice(1)">Seçenek B</button>
+            </div>
+        </div>
+
+        <!-- Ekran 3: Ölüm Ekranı -->
+        <div id="death-screen" class="screen hidden">
+            <h1 class="death-title">HAYATTA KALAMADINIZ!</h1>
+            <p id="death-cause" class="cause-text">Sebebini burada göreceksiniz.</p>
+            <p id="death-stats" style="text-align: center; font-size: 15px; color: var(--text-primary);"></p>
+            <button class="btn btn-green" onclick="watchAdAndRevive()">🎬 1 Reklam İzle ve Canlan</button>
+            <button class="btn btn-red" onclick="returnToMenu()">Ana Menüye Dön</button>
+        </div>
+
+        <!-- Ekran 4: Başarı / Zafer Ekranı -->
+        <div id="victory-screen" class="screen hidden">
+            <h1 class="victory-title">TEBRİKLER!</h1>
+            <p style="text-align: center; line-height: 1.6;">Zorlu engelleri aşarak bu evrenden sağ salim kurtulmayı başardınız.</p>
+            <p id="victory-stats" style="text-align: center; font-weight: bold; color: var(--accent-green);"></p>
+            <button class="btn btn-green" onclick="returnToMenu()">Yeni Evren Seç</button>
+        </div>
+
+        <!-- Ekran 5: Sahte Reklam Modalı -->
+        <div id="ad-modal" class="modal-overlay hidden">
+            <div class="ad-box">
+                <h3 style="color: var(--accent-cyan);">Reklam Yükleniyor</h3>
+                <p style="font-size: 13px; color: var(--text-secondary); margin-top: 5px;">Canlanmak için lütfen bekleyin...</p>
+                <div id="ad-countdown" class="ad-countdown">3</div>
+                <p style="font-size: 11px; color: #4b5563;">[SAHTE REKLAM ALANI]</p>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Admob Banner Reklam Alanı -->
+    <div class="admob-banner">[ADMOB BANNER REKLAM ALANI]</div>
+
+    <script>
+        // --- HİKAYE VE DÜĞÜM VERİ YAPISI ---
+        const storyData = {
+            zombie: {
+                z_start: {
+                    text: "Şehir düştü. Sokaklar zombilerle dolu. Sığınağının kapısı dışarıdan sertçe zorlanıyor, pencerelerden gölgeler geçiyor. Ne yapacaksın?",
+                    options: [
+                        { text: "Kapıya barikat kurup silahını hazırla.", next: "z_defense", effects: { can: -5, aclik: -15, special: 20 } },
+                        { text: "Camdan atlayıp arka sokaklara doğru kaç.", next: "z_street", effects: { can: -25, aclik: -20, special: -5 } }
+                    ]
+                },
+                z_defense: {
+                    text: "Barikat şimdilik zombileri durdurdu ancak içeride sıkıştın. Mutfaktan şüpheli sesler gelirken erzakların da neredeyse bitti.",
+                    options: [
+                        { text: "Erzak aramak için mutfağı incele.", next: "z_scavenge", effects: { can: -15, aclik: 30, special: -10 } },
+                        { text: "Kapıyı kilitleyip bir köşede dinlen.", next: "z_siege", effects: { can: -10, aclik: -25, special: 0 } }
+                    ]
+                },
+                z_street: {
+                    text: "Karanlık sokaklara inmeyi başardın fakat bir virajda devasa bir zombi sürüsüyle burun buruna geldin!",
+                    options: [
+                        { text: "Tüm gücünle ateş ederek yolu aç.", next: "z_scavenge", effects: { can: -10, aclik: -15, special: -35 } },
+                        { text: "Hemen yan sokağa kaçmaya çalış.", next: "z_siege", effects: { can: -35, aclik: -20, special: -5 } }
+                    ]
+                },
+                z_scavenge: {
+                    text: "Bir süpermarkete sızdın. Raflarda konserve buldun fakat başka bir silahlı yağmacı da seni hedef almış durumda.",
+                    options: [
+                        { text: "Erzakları onunla barışçıl şekilde paylaşmayı teklif et.", next: "z_escape_city", effects: { can: 15, aclik: 20, special: 0 } },
+                        { text: "Tetiği çek ve marketi zorla ele geçir.", next: "z_escape_city", effects: { can: -20, aclik: 35, special: -15 } }
+                    ]
+                },
+                z_siege: {
+                    text: "Zombiler sığınağının zayıf yerlerini patlattı! Artık kaçacak alanın neredeyse hiç kalmadı.",
+                    options: [
+                        { text: "Yangın merdiveninden aşağıya atla.", next: "z_escape_city", effects: { can: -40, aclik: -10, special: -5 } },
+                        { text: "Son mermilerine kadar çatışarak ilerle.", next: "z_escape_city", effects: { can: -15, aclik: -10, special: -40 } }
+                    ]
+                },
+                z_escape_city: {
+                    text: "Şehir merkezinde askeri bir tahliye helikopterinin pervanelerini duyuyorsun. Ancak oraya varmak için zombilerle kaplı ana köprüyü geçmelisin.",
+                    options: [
+                        { text: "Köprüde koşan insan kalabalığına karış.", next: "victory", effects: { can: -25, aclik: -10, special: 0 } },
+                        { text: "Kalan cephaneni kullanarak helikoptere yol aç.", next: "victory", effects: { can: -10, aclik: -10, special: -30 } }
+                    ]
+                }
+            },
+            cyberpunk: {
+                c_start: {
+                    text: "Neo-Istanbul'da kaçak bir Netrunner'sın. Arasaka polisleri siber laboratuvarını bastı!",
+                    options: [
+                        { text: "Ana terminale bağlanıp sistemleri hackle.", next: "c_subway", effects: { can: 0, aclik: -15, special: -25 } },
+                        { text: "Siber-gözlerini aşırı yükle ve koridorda çatış.", next: "c_alley", effects: { can: -25, aclik: -20, special: 15 } }
+                    ]
+                },
+                c_subway: {
+                    text: "Neon ışıklı metro tünellerine kaçtın. Gizemli bir yabancı sana enerji barları karşılığında şüpheli bir veri çipi satmak istiyor.",
+                    options: [
+                        { text: "Çipi satın alıp hemen beynine yükle.", next: "c_heist", effects: { can: -15, aclik: -20, special: 35 } },
+                        { text: "Teklifi reddet ve otomatı hackleyerek beslen.", next: "c_heist", effects: { can: -5, aclik: 30, special: -15 } }
+                    ]
+                },
+                c_alley: {
+                    text: "Ara sokaklardaki asit yağmuru siber parçalarını aşındırıyor. Üstündeki polis dörtyüzlü dronu seni taramaya başladı.",
+                    options: [
+                        { text: "Dronu EMP dalgasıyla yak.", next: "c_heist", effects: { can: -5, aclik: -10, special: -30 } },
+                        { text: "Hızla çöplüğün arkasına gizlen.", next: "c_heist", effects: { can: -20, aclik: -25, special: 0 } }
+                    ]
+                },
+                c_heist: {
+                    text: "Arasaka veri merkezine sızıp takip yazılımını silmen gerekiyor. Ancak güvenlik yapay zekası karşına çıktı.",
+                    options: [
+                        { text: "Veri sunucularına aşırı yük bindirip yangın çıkar.", next: "c_boss", effects: { can: -15, aclik: -10, special: -25 } },
+                        { text: "Siber-kod yazarak yapay zekayı kandır.", next: "c_boss", effects: { can: 0, aclik: -20, special: -35 } }
+                    ]
+                },
+                c_boss: {
+                    text: "Ana çıkış kapısında siber-ninja 'Kusanagi' yolunu kesiyor. Katana bıçağı parlıyor.",
+                    options: [
+                        { text: "Siber implantlarını sınırına kadar zorlayıp saldır.", next: "victory", effects: { can: -40, aclik: -10, special: -15 } },
+                        { text: "Gözlerini kör etmek için yakındaki trafoları patlat.", next: "victory", effects: { can: -15, aclik: -10, special: -45 } }
+                    ]
+                }
+            },
+            island: {
+                a_start: {
+                    text: "Gemi kazasından sonra ıssız bir adanın kumsalında uyandın. Boğazın kurumuş, güneş ise yakıcı.",
+                    options: [
+                        { text: "Tatlı su bulmak amacıyla ormanın içine gir.", next: "a_forest", effects: { can: -5, aclik: -20, special: 30 } },
+                        { text: "Sahilde kalıp korunaklı bir sığınak inşa et.", next: "a_shelter", effects: { can: 15, aclik: -15, special: -25 } }
+                    ]
+                },
+                a_shelter: {
+                    text: "Gece çöktü ve sıcaklık sıfıra yaklaşıyor. Vahşi hayvan sesleri duyuyorsun. Ateş yakmalısın.",
+                    options: [
+                        { text: "Kuru odunları sürterek ilkel yolla ateş yak.", next: "a_hunt", effects: { can: -10, aclik: -15, special: -20 } },
+                        { text: "Enkazdan kalan kırık camı büyüteç yapıp dene.", next: "a_hunt", effects: { can: 0, aclik: -10, special: -10 } }
+                    ]
+                },
+                a_forest: {
+                    text: "Ağaçların arasında yürürken önüne irice bir yaban domuzu çıktı ve sana doğru koşmaya başladı!",
+                    options: [
+                        { text: "Sivri bir sopa edinip domuzla dövüş.", next: "a_hunt", effects: { can: -30, aclik: 40, special: -15 } },
+                        { text: "Ağaca tırmanıp yabani meyvelerle idare et.", next: "a_hunt", effects: { can: -5, aclik: 15, special: -10 } }
+                    ]
+                },
+                a_hunt: {
+                    text: "Korkunç bir tropikal fırtına patlak verdi. Dev dalgalar adanın düzlüklerini kaplıyor.",
+                    options: [
+                        { text: "Dağın yamacındaki yüksek mağaraya sığın.", next: "a_rescue", effects: { can: -10, aclik: -15, special: -15 } },
+                        { text: "Yaptığın sığınağı dalgalara karşı desteklemeye çalış.", next: "a_rescue", effects: { can: -40, aclik: -10, special: -25 } }
+                    ]
+                },
+                a_rescue: {
+                    text: "Fırtına dindiğinde ufukta dev bir kuru yük gemisi gördün! Sana çok uzaklardan geçiyor.",
+                    options: [
+                        { text: "Bütün gücünle kumsalda büyük bir duman ateşi yak.", next: "victory", effects: { can: 0, aclik: -10, special: -30 } },
+                        { text: "Enkaz parçalarından sal yapıp gemiye doğru kürek çek.", next: "victory", effects: { can: -45, aclik: -10, special: -15 } }
+                    ]
+                }
+            }
+        };
+
+        // --- OYUN DURUMU (STATE) ---
+        let gameState = {
+            universe: null,
+            day: 1,
+            can: 100,
+            aclik: 100,
+            special: 100,
+            currentNodeId: null,
+            specialName: ""
+        };
+
+        // Ölüm durumunda canlanabilmek için yedek durum
+        let lastSavedState = {};
+
+        // --- EKRAN GEÇİŞ FONKSİYONU ---
+        function showScreen(screenId) {
+            document.getElementById('universe-screen').classList.add('hidden');
+            document.getElementById('game-screen').classList.add('hidden');
+            document.getElementById('death-screen').classList.add('hidden');
+            document.getElementById('victory-screen').classList.add('hidden');
+
+            document.getElementById(screenId).classList.remove('hidden');
+        }
+
+        // --- OYUNU BAŞLATMA ---
+        function startUniverse(universeName) {
+            gameState.universe = universeName;
+            gameState.day = 1;
+            gameState.can = 100;
+            gameState.aclik = 100;
+            gameState.special = 100;
+
+            if (universeName === 'zombie') {
+                gameState.specialName = "Cephane";
+                gameState.currentNodeId = "z_start";
+            } else if (universeName === 'cyberpunk') {
+                gameState.specialName = "Enerji";
+                gameState.currentNodeId = "c_start";
+            } else if (universeName === 'island') {
+                gameState.specialName = "Su Seviyesi";
+                gameState.currentNodeId = "a_start";
+            }
+
+            showScreen('game-screen');
+            updateUI();
+        }
+
+        // --- ARAYÜZÜ GÜNCELLEME ---
+        function updateUI() {
+            const node = storyData[gameState.universe][gameState.currentNodeId];
+            
+            // Gün Sayısı
+            document.getElementById('day-count').innerText = gameState.day;
+
+            // Barların Değerleri ve Uzunlukları
+            document.getElementById('label-can').innerText = gameState.can + "%";
+            document.getElementById('bar-can').querySelector('.bar-inner').style.width = gameState.can + "%";
+
+            document.getElementById('label-aclik').innerText = gameState.aclik + "%";
+            document.getElementById('bar-aclik').querySelector('.bar-inner').style.width = gameState.aclik + "%";
+
+            document.getElementById('label-special-name').innerText = gameState.specialName;
+            document.getElementById('label-special').innerText = gameState.special + "%";
+            document.getElementById('bar-special').querySelector('.bar-inner').style.width = gameState.special + "%";
+
+            // Hikaye ve Buton Metinleri
+            document.getElementById('story-text').innerText = node.text;
+            document.getElementById('btn-choice-a').innerText = node.options[0].text;
+            document.getElementById('btn-choice-b').innerText = node.options[1].text;
+        }
+
+        // --- SEÇİM YAPILDIĞINDA ÇALIŞAN FONKSİYON ---
+        function makeChoice(optionIndex) {
+            // Canlanma durumunda kalınan gün ve düğümü korumak için kaydet
+            lastSavedState = {
+                day: gameState.day,
+                currentNodeId: gameState.currentNodeId
+            };
+
+            const node = storyData[gameState.universe][gameState.currentNodeId];
+            const selectedOption = node.options[optionIndex];
+
+            // Barları Güncelle
+            if (selectedOption.effects) {
+                gameState.can = Math.max(0, Math.min(100, gameState.can + (selectedOption.effects.can || 0)));
+                gameState.aclik = Math.max(0, Math.min(100, gameState.aclik + (selectedOption.effects.aclik || 0)));
+                gameState.special = Math.max(0, Math.min(100, gameState.special + (selectedOption.effects.special || 0)));
+            }
+
+            // Gün sayısını ilerlet
+            gameState.day += 1;
+
+            // Ölüm Kontrolü
+            if (gameState.can <= 0 || gameState.aclik <= 0 || gameState.special <= 0) {
+                let cause = "Tüm direnciniz kırıldı ve yok oldunuz.";
+                if (gameState.can <= 0) cause = "Aldığınız ölümcül yaralar sonucunda can verdiniz.";
+                else if (gameState.aclik <= 0) cause = "Açlıktan bitkin düşerek hayata gözlerinizi yumdunuz.";
+                else if (gameState.special <= 0) {
+                    if (gameState.universe === 'zombie') cause = "Cephaneniz tükendiği için savunmasız kalıp zombilere yem oldunuz.";
+                    else if (gameState.universe === 'cyberpunk') cause = "Siber enerjiniz sıfırlandı, tüm sistemleriniz kalıcı olarak çöktü.";
+                    else if (gameState.universe === 'island') cause = "Susuzluktan bilincinizi yitirdiniz ve kumsalda kuruyakaldınız.";
+                }
+                
+                document.getElementById('death-cause').innerText = cause;
+                document.getElementById('death-stats').innerText = `${gameState.day}. Güne kadar dayanabildiniz.`;
+                showScreen('death-screen');
+                return;
+            }
+
+            // Zafer Kontrolü
+            if (selectedOption.next === 'victory') {
+                document.getElementById('victory-stats').innerText = `${gameState.day} Gün Boyunca Hayatta Kaldınız!`;
+                showScreen('victory-screen');
+                return;
+            }
+
+            // Sonraki Düğüme Geç
+            gameState.currentNodeId = selectedOption.next;
+            updateUI();
+        }
+
+        // --- REKLAM İZLEME VE CANLANMA SİSTEMİ ---
+        function watchAdAndRevive() {
+            const adModal = document.getElementById('ad-modal');
+            const countdownEl = document.getElementById('ad-countdown');
+            adModal.classList.remove('hidden');
+
+            let timeLeft = 3;
+            countdownEl.innerText = timeLeft;
+
+            const interval = setInterval(() => {
+                timeLeft--;
+                if (timeLeft > 0) {
+                    countdownEl.innerText = timeLeft;
+                } else {
+                    clearInterval(interval);
+                    adModal.classList.add('hidden');
+                    revivePlayer();
+                }
+            }, 1000);
+        }
+
+        function revivePlayer() {
+            // Kaldığı gün ve düğümden devam eder
+            gameState.day = lastSavedState.day;
+            gameState.currentNodeId = lastSavedState.currentNodeId;
+            
+            // Tüm barları %50 oranına geri getirir
+            gameState.can = 50;
+            gameState.aclik = 50;
+            gameState.special = 50;
+
+            showScreen('game-screen');
+            updateUI();
+        }
+
+        // --- MENÜYE DÖNÜŞ ---
+        function returnToMenu() {
+            showScreen('universe-screen');
+        }
+    </script>
+</body>
+</html>
