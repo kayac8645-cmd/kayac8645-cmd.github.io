@@ -8208,14 +8208,38 @@ setTimeout(()=>autoCleanOldChats(),2000);
 // ═══════════════════════════════════════════════════════════════
 
 const APP = {
-  version: '5.1.0',
-  build:   '20250530',
+  version: '7.0.0',
+  build:   '20260613',
   name:    'Nova AI',
   author:  'Nova Team',
   license: 'MIT',
   // Güncelleme sunucusu — kendi GitHub raw URL'ini buraya koy
   updateURL: 'https://raw.githubusercontent.com/nova-ai/nova-ai/main/version.json',
   changelog: [
+    {
+      version: '7.0.0',
+      date: '2026-06-13',
+      type: 'major',
+      changes: [
+        '🔄 LIFECYCLE: arka plan/ön plan yönetimi, AudioContext suspend/resume, wake word watchdog (30s)',
+        '💾 STORAGE: localStorage taşma koruması, otomatik arşivleme, QuotaExceededError yönetimi',
+        '🌐 Global error boundary, fetchWithRetry (exponential backoff), API_CACHE, RATE_LIMIT',
+        '📊 getHealthReport — sistem sağlık skoru ve durum raporu',
+        '⚙️ CODE_ENGINE v3: Normal / Uzman (SOLID+tip+JSDoc) / Mimar (Clean Architecture+patterns)',
+        '🌍 14 dil desteği: JS, TS, Python, Java, C++, C#, Go, Rust, PHP, Swift, Kotlin, Dart, Ruby',
+        '🔍 Kod Açıkla / Optimize / Test / Güvenlik Analizi / Dil Dönüştürücü / Refactor / Diff',
+        '⌨️ Ctrl+K Komut Paleti — 26 hızlı komut',
+        '🎨 12 Tema Mağazası: Cyberpunk, Matrix, Okyanus, Gün Batımı, Orman, Gül, Gece Yarısı, Altın, Buz, Kan, Mono',
+        '💬 Mesaj Reaksiyonları (emoji + localStorage)',
+        '🔢 Canlı Token Sayacı (renk uyarısı: 1000/2000)',
+        '📖 Sesli Kitap Okuyucu (TR/EN/DE, hız kontrolü)',
+        '✍️ Yazı Koçu',
+        '🔎 Gerçek Web Arama (Wikipedia API, Türkçe)',
+        '🏥 Sistem Sağlık Paneli',
+        '🕵️ İnkognito Modu',
+        '📦 CDN Fallback sistemi',
+      ]
+    },
     {
       version: '5.1.0',
       date: '2025-05-30',
