@@ -638,6 +638,26 @@ body.dm #dmbdg{display:block;}
 @keyframes vbar{0%,100%{transform:scaleY(.4)}50%{transform:scaleY(1)}}
 @keyframes voiceRing{0%,100%{box-shadow:0 0 0 0 rgba(168,85,247,.5)}50%{box-shadow:0 0 0 20px rgba(168,85,247,0)}}
 .voice-ring.listening{animation:voiceRing .8s ease-in-out infinite!important}
+
+/* ══ v8.0 YENİ ÖZELLİKLER ══ */
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+@keyframes spin{to{transform:rotate(360deg)}}
+.stream-cursor{display:inline-block;width:2px;height:1em;background:var(--ac);margin-left:2px;vertical-align:middle;animation:blink .65s infinite;border-radius:1px;}
+.sugg-row{display:flex;flex-wrap:wrap;gap:5px;padding:4px 12px 8px;margin:0;}
+.sugg-chip{padding:5px 11px;border-radius:18px;border:1px solid rgba(168,85,247,.35);background:rgba(168,85,247,.07);color:var(--ac);font-size:11px;cursor:pointer;transition:all .15s;white-space:nowrap;max-width:200px;overflow:hidden;text-overflow:ellipsis;}
+.sugg-chip:hover{background:rgba(168,85,247,.2);border-color:var(--ac);transform:translateY(-1px);}
+.mab.bm-saved{color:#fbbf24!important;}
+#bm-panel{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9800;background:var(--bg2);border:1px solid var(--br);border-radius:18px;width:min(500px,96vw);max-height:84vh;display:none;box-shadow:0 24px 60px rgba(0,0,0,.88);flex-direction:column;overflow:hidden;}
+#bm-panel.open{display:flex;}
+.bm-item{padding:11px 15px;border-bottom:1px solid var(--br);cursor:pointer;transition:background .12s;}
+.bm-item:hover{background:var(--glass);}
+.bm-text{font-size:12px;color:var(--t1);line-height:1.55;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
+.bm-meta{font-size:10px;color:var(--tm);margin-top:4px;display:flex;align-items:center;gap:6px;}
+#hlist-search{width:calc(100% - 16px);margin:5px 8px 3px;background:var(--card);border:1px solid var(--br);border-radius:8px;padding:6px 10px;color:var(--t1);font-size:11px;outline:none;display:block;transition:border-color .15s;}
+#hlist-search:focus{border-color:var(--ac);}
+.hi.pinned{border-left:2px solid var(--ac)!important;}
+.pin-btn{background:none;border:none;color:var(--tm);cursor:pointer;font-size:10px;padding:0 2px;flex-shrink:0;line-height:1;}
+.pin-btn.pinned{color:#fbbf24;}
 </style>
 </head>
 <body>
@@ -12810,5 +12830,446 @@ init();
   </div>
 </div>
 
+
+<!-- ═══ v8.0: YER İŞARETLERİ PANELİ ═══ -->
+<div id="bm-panel">
+  <div style="padding:14px 16px;border-bottom:1px solid var(--br);display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
+    <span style="font-size:14px;font-weight:800;">🔖 Yer İşaretleri</span>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <span id="bm-count" style="font-size:11px;color:var(--tm);"></span>
+      <button onclick="closeBmPanel()" style="background:none;border:none;color:var(--tm);cursor:pointer;font-size:16px;">✕</button>
+    </div>
+  </div>
+  <div id="bm-list" style="flex:1;overflow-y:auto;"></div>
+  <div style="padding:10px 14px;border-top:1px solid var(--br);display:flex;gap:8px;flex-shrink:0;">
+    <button onclick="clearAllBm()" style="flex:1;padding:7px;background:rgba(239,68,68,.1);border:1px solid #ef444444;border-radius:8px;color:#ef4444;cursor:pointer;font-size:11px;font-weight:700;">🗑 Tümünü Sil</button>
+    <button onclick="exportBmMd()" style="flex:1;padding:7px;background:rgba(34,197,94,.1);border:1px solid #22c55e44;border-radius:8px;color:#22c55e;cursor:pointer;font-size:11px;font-weight:700;">📄 MD İndir</button>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   Nova AI v8.0 — GELİŞMİŞ ÖZELLİKLER
+   • Multi-turn conversation context
+   • Streaming responses (Claude)
+   • Smart AI suggestions
+   • Message bookmarks
+   • Regenerate response
+   • Chat search
+   • Markdown export
+   • Chat pinning
+   ═══════════════════════════════════════════════════════════════ */
+(function() {
+'use strict';
+
+/* ── A. MULTI-TURN CONTEXT: genRespReal override ── */
+const _genRespRealOrig = window.genRespReal || genRespReal;
+window.genRespReal = async function(userMsg) {
+  const msgs = [];
+  if (S.chatId && S.chats[S.chatId]) {
+    (S.chats[S.chatId].msgs || []).slice(-12).forEach(m => {
+      msgs.push({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.text });
+    });
+  }
+  msgs.push({ role: 'user', content: userMsg });
+
+  const def = MODELS[S.mk], ver = getVL(S.mk, S.mv);
+  const sys = buildSys(def, ver);
+  const p = S.mk;
+
+  if ((p === 'nova' || p === 'claude') && APIS.anthropic) {
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 20000);
+      const r = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': APIS.anthropic, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-calls': 'true' },
+        body: JSON.stringify({ model: p === 'claude' ? getClaudeModel(S.mv) : 'claude-sonnet-4-20250514', max_tokens: 2048, system: sys, messages: msgs }),
+        signal: ctrl.signal
+      });
+      clearTimeout(t);
+      const d = await r.json();
+      if (d.error) throw new Error(d.error.message);
+      return d.content?.map(c => c.text || '').join('') || null;
+    } catch(e) { console.warn('Anthropic:', e.message); }
+  }
+  if (p === 'gpt' && APIS.openai) {
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 20000);
+      const r = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + APIS.openai },
+        body: JSON.stringify({ model: getOpenAIModel(S.mv), max_tokens: 2048, messages: [{ role: 'system', content: sys }, ...msgs] }),
+        signal: ctrl.signal
+      });
+      clearTimeout(t);
+      const d = await r.json();
+      if (d.error) throw new Error(d.error.message);
+      return d.choices?.[0]?.message?.content || null;
+    } catch(e) { console.warn('OpenAI:', e.message); }
+  }
+  if (p === 'deepseek' && APIS.deepseek) {
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 20000);
+      const r = await fetch('https://api.deepseek.com/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + APIS.deepseek },
+        body: JSON.stringify({ model: getDeepSeekModel(S.mv), max_tokens: 2048, messages: [{ role: 'system', content: sys }, ...msgs] }),
+        signal: ctrl.signal
+      });
+      clearTimeout(t);
+      const d = await r.json();
+      if (d.error) throw new Error(d.error.message);
+      return d.choices?.[0]?.message?.content || null;
+    } catch(e) { console.warn('DeepSeek:', e.message); }
+  }
+  if (p === 'gemini' && APIS.gemini) {
+    try {
+      const model = getGeminiModel(S.mv);
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 20000);
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${APIS.gemini}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: msgs.map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })), generationConfig: { maxOutputTokens: 2048 } }),
+        signal: ctrl.signal
+      });
+      clearTimeout(t);
+      const d = await r.json();
+      if (d.error) throw new Error(d.error.message);
+      return d.candidates?.[0]?.content?.parts?.[0]?.text || null;
+    } catch(e) { console.warn('Gemini:', e.message); }
+  }
+  return null;
+};
+
+/* ── B. STREAMING (Claude / Anthropic) ── */
+async function streamResponse(userMsg, onChunk) {
+  if (!APIS.anthropic || (S.mk !== 'nova' && S.mk !== 'claude')) return null;
+  const msgs = [];
+  if (S.chatId && S.chats[S.chatId]) {
+    (S.chats[S.chatId].msgs || []).slice(-12).forEach(m => {
+      msgs.push({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.text });
+    });
+  }
+  msgs.push({ role: 'user', content: userMsg });
+
+  try {
+    const ctrl = new AbortController();
+    setTimeout(() => ctrl.abort(), 30000);
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': APIS.anthropic, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-calls': 'true' },
+      body: JSON.stringify({ model: S.mk === 'claude' ? getClaudeModel(S.mv) : 'claude-sonnet-4-20250514', max_tokens: 2048, system: buildSys(MODELS[S.mk], getVL(S.mk, S.mv)), messages: msgs, stream: true }),
+      signal: ctrl.signal
+    });
+    if (!r.ok || !r.body) return null;
+    const reader = r.body.getReader();
+    const dec = new TextDecoder();
+    let full = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      for (const line of dec.decode(value).split('\n')) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const j = JSON.parse(line.slice(6));
+          const delta = j.delta?.text || '';
+          if (delta) { full += delta; onChunk(full); }
+        } catch {}
+      }
+    }
+    return full || null;
+  } catch(e) { return null; }
+}
+
+/* ── C. ENHANCED sendMsg with streaming + suggestions ── */
+const _origSendMsg = window.sendMsg;
+window.sendMsg = async function(txt) {
+  const inp = document.getElementById('msgin');
+  const msg = txt || inp.value.trim();
+  if (!msg) return;
+  if (!txt) { inp.value = ''; autoRz(inp); }
+  document.querySelectorAll('.sugg-row').forEach(e => e.remove());
+  const ws = document.getElementById('ws'); if (ws) ws.remove();
+  if (!S.chatId) newChat(false);
+  addMsg('user', msg);
+  S.msgs++; updStats();
+  const t0 = performance.now();
+
+  const canStream = !!(APIS.anthropic && (S.mk === 'nova' || S.mk === 'claude'));
+  if (canStream) {
+    const def = MODELS[S.mk];
+    const m = document.getElementById('msgs');
+    const wrap = document.createElement('div'); wrap.className = 'mw mai';
+    const meta = document.createElement('div'); meta.className = 'mmeta';
+    const t = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+    meta.innerHTML = `<span class="mtag" style="background:${def.c}22;color:${def.c}">${def.i} ${def.l}</span><span>${t}</span>`;
+    const bbl = document.createElement('div'); bbl.className = 'mb bai';
+    bbl.innerHTML = '<span class="stream-cursor"></span>';
+    wrap.appendChild(meta); wrap.appendChild(bbl); m.appendChild(wrap); scrollBot();
+
+    const text = await streamResponse(msg, partial => {
+      bbl.innerHTML = fmtResp(partial) + '<span class="stream-cursor"></span>';
+      scrollBot();
+    });
+    if (text) {
+      bbl.innerHTML = fmtResp(text);
+      _addMsgActions(wrap, text);
+      document.getElementById('stping').textContent = Math.round(performance.now() - t0) + ' ms';
+      saveChat(msg, text); renderHistory(); scrollBot();
+      showSuggestions(text); autoTitleChat(msg);
+      return;
+    }
+    wrap.remove();
+  }
+
+  const tid = showTyping();
+  const res = await genResp(msg);
+  removeTyping(tid);
+  document.getElementById('stping').textContent = Math.round(performance.now() - t0) + ' ms';
+  if (S.mode === 'think') addThinking(res.think || 'Analiz tamamlandı ✓');
+  const wrap2 = addMsg('ai', res.text);
+  _addMsgActions(wrap2, res.text);
+  if (S.mode === 'human') tts(res.text);
+  saveChat(msg, res.text); renderHistory(); scrollBot();
+  showSuggestions(res.text); autoTitleChat(msg);
+};
+
+function _addMsgActions(wrap, text) {
+  if (!wrap) return;
+  const existing = wrap.querySelector('.macts');
+  if (existing) { existing.innerHTML += '<button class="mab" onclick="bmMsg(this)">🔖 Kaydet</button><button class="mab" onclick="regenMsg()">🔄 Yenile</button>'; return; }
+  const acts = document.createElement('div'); acts.className = 'macts';
+  acts.innerHTML = `<button class="mab" onclick="cpMsgTxt(this)">📋 Kopyala</button><button class="mab" onclick="ttsMsg(this)">🔊 Sesli</button><button class="mab" onclick="sumMsg(this)">📝 Özetle</button><button class="mab" onclick="bmMsg(this)">🔖 Kaydet</button><button class="mab" onclick="regenMsg()">🔄 Yenile</button>`;
+  const rate = document.createElement('div'); rate.className = 'mrate';
+  rate.innerHTML = `<button class="rb" onclick="rateM(this,'up')">👍</button><button class="rb" onclick="rateM(this,'down')">👎</button>`;
+  wrap.appendChild(acts); wrap.appendChild(rate);
+}
+
+/* ── D. SMART SUGGESTIONS ── */
+const SUGG_POOL = [
+  ['💡 Daha açıkla', 'Bunu daha ayrıntılı açıklar mısın?'],
+  ['💻 Kod yaz', 'Bu için çalışan kod yazar mısın?'],
+  ['📊 Karşılaştır', 'Alternatiflerle karşılaştırır mısın?'],
+  ['✅ Özetle', 'Bu konuyu 3 maddeyle özetler misin?'],
+  ['🚀 Optimize et', 'Bu kodu optimize eder misin?'],
+  ['🧪 Test yaz', 'Birim testleri yazar mısın?'],
+  ['🔒 Güvenlik', 'Güvenlik açıkları var mı?'],
+  ['📚 Kaynak öner', 'Bu konuda kaynak önerir misin?'],
+];
+function showSuggestions(aiText) {
+  const m = document.getElementById('msgs');
+  const row = document.createElement('div'); row.className = 'sugg-row';
+  const isCode = /```|function\b|class\b|const\b|def |import\b/.test(aiText);
+  const pool = isCode
+    ? [['🚀 Optimize et','Bu kodu optimize et'],['🧪 Test yaz','Birim testi yaz'],['📖 Açıkla','Bu kodu satır satır açıkla'],['🔒 Güvenlik','Güvenlik açığı analizi yap']]
+    : SUGG_POOL.slice(0, 4);
+  pool.forEach(([label, prompt]) => {
+    const btn = document.createElement('button'); btn.className = 'sugg-chip'; btn.textContent = label;
+    btn.onclick = () => { row.remove(); window.sendMsg(prompt); };
+    row.appendChild(btn);
+  });
+  m.appendChild(row); scrollBot();
+}
+
+/* ── E. BOOKMARKS ── */
+let BM = JSON.parse(localStorage.getItem('nova_bm') || '[]');
+function saveBM() { localStorage.setItem('nova_bm', JSON.stringify(BM)); }
+
+window.bmMsg = function(btn) {
+  const text = btn.closest('.mw')?.querySelector('.mb')?.textContent || '';
+  if (!text) return;
+  const idx = BM.findIndex(b => b.text === text);
+  if (idx >= 0) {
+    BM.splice(idx, 1); saveBM();
+    btn.textContent = '🔖 Kaydet'; btn.classList.remove('bm-saved');
+    showToast('Yer işareti kaldırıldı');
+  } else {
+    BM.unshift({ text: text.substring(0, 1000), ts: Date.now(), cid: S.chatId, ctitle: S.chats[S.chatId]?.title || 'Sohbet' });
+    saveBM();
+    btn.textContent = '⭐ Kaydedildi'; btn.classList.add('bm-saved');
+    showToast('⭐ Yer işaretine eklendi!');
+  }
+};
+
+window.openBmPanel = function() {
+  document.getElementById('bm-panel').classList.add('open');
+  renderBmList();
+};
+window.closeBmPanel = function() { document.getElementById('bm-panel').classList.remove('open'); };
+
+function renderBmList() {
+  const list = document.getElementById('bm-list');
+  const cnt = document.getElementById('bm-count');
+  if (!list) return;
+  if (cnt) cnt.textContent = BM.length + ' kayıt';
+  if (!BM.length) {
+    list.innerHTML = '<div style="text-align:center;padding:32px;color:var(--tm);font-size:12px;">Henüz yer işareti yok.<br>AI yanıtlarındaki 🔖 Kaydet butonunu kullan.</div>';
+    return;
+  }
+  list.innerHTML = BM.map((b, i) => `
+    <div class="bm-item" onclick="bmItemClick(${i})">
+      <div class="bm-text">${escH(b.text)}</div>
+      <div class="bm-meta">
+        <span>📁 ${escH(b.ctitle || 'Sohbet')}</span>
+        <span>·</span>
+        <span>${new Date(b.ts).toLocaleString('tr-TR',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</span>
+        <button onclick="event.stopPropagation();deleteBm(${i})" style="margin-left:auto;background:none;border:none;color:var(--tm);cursor:pointer;font-size:11px;" title="Sil">🗑</button>
+      </div>
+    </div>`).join('');
+}
+window.bmItemClick = function(i) {
+  const b = BM[i]; if (!b) return;
+  document.getElementById('msgin').value = b.text.substring(0, 300);
+  closeBmPanel();
+  document.getElementById('msgin').focus();
+};
+window.deleteBm = function(i) { BM.splice(i, 1); saveBM(); renderBmList(); };
+window.clearAllBm = function() { if (!BM.length) return; BM = []; saveBM(); renderBmList(); showToast('Tüm yer işaretleri silindi'); };
+window.exportBmMd = function() {
+  if (!BM.length) return showToast('Yer işareti yok');
+  let md = '# Nova AI — Yer İşaretleri\n\n';
+  BM.forEach((b,i) => { md += `## ${i+1}. ${b.ctitle || 'Sohbet'}\n\n${b.text}\n\n---\n\n`; });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([md],{type:'text/markdown'}));
+  a.download = 'nova-yer-isaretleri.md'; a.click(); showToast('📄 MD indirildi!');
+};
+
+/* ── F. REGENERATE RESPONSE ── */
+window.regenMsg = function() {
+  if (!S.chatId || !S.chats[S.chatId]) return;
+  const msgs = S.chats[S.chatId].msgs || [];
+  if (!msgs.length) return;
+  let lastUserMsg = null;
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    if (msgs[i].role === 'user') { lastUserMsg = msgs[i].text; break; }
+  }
+  if (!lastUserMsg) return;
+  // Remove last AI message from history
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    if (msgs[i].role === 'ai') { msgs.splice(i, 1); break; }
+  }
+  lsS('chats', S.chats);
+  // Remove last AI bubble from DOM
+  const mDom = document.getElementById('msgs');
+  const doms = mDom.querySelectorAll('.mw.mai');
+  if (doms.length) doms[doms.length - 1].remove();
+  document.querySelectorAll('.sugg-row').forEach(e => e.remove());
+  showToast('🔄 Yeniden üretiliyor...');
+  window.sendMsg(lastUserMsg);
+};
+
+/* ── G. CHAT SEARCH ── */
+function injectChatSearch() {
+  const spHistory = document.getElementById('sp-history');
+  if (!spHistory || document.getElementById('hlist-search')) return;
+  const inp = document.createElement('input');
+  inp.id = 'hlist-search';
+  inp.placeholder = '🔍 Sohbet ara...';
+  inp.addEventListener('input', function() {
+    const q = this.value.toLowerCase();
+    document.querySelectorAll('#hlist .hi').forEach(el => {
+      const title = el.querySelector('.htit')?.textContent?.toLowerCase() || '';
+      el.style.display = !q || title.includes(q) ? '' : 'none';
+    });
+  });
+  spHistory.insertBefore(inp, spHistory.firstChild);
+}
+
+/* ── H. PINNED CHATS ── */
+let PINS = JSON.parse(localStorage.getItem('nova_pins') || '[]');
+window.togglePin = function(id, e) {
+  if (e) e.stopPropagation();
+  const i = PINS.indexOf(id);
+  if (i >= 0) { PINS.splice(i, 1); showToast('Sabit kaldırıldı'); }
+  else { PINS.push(id); showToast('📌 Sabitlendi!'); }
+  localStorage.setItem('nova_pins', JSON.stringify(PINS));
+  renderHistory();
+};
+
+/* ── I. Enhanced renderHistory (chat search + pins) ── */
+const _renderHistoryOrig = window.renderHistory || renderHistory;
+window.renderHistory = function() {
+  _renderHistoryOrig();
+  injectChatSearch();
+  // Add pin buttons to chat history items
+  const hlist = document.getElementById('hlist');
+  if (!hlist) return;
+  hlist.querySelectorAll('.hi').forEach(el => {
+    if (el.querySelector('.pin-btn')) return;
+    // Guess chatId from onclick
+    const oc = el.getAttribute('onclick') || '';
+    const match = oc.match(/loadChat\('([^']+)'\)/);
+    if (!match) return;
+    const cid = match[1];
+    const isPinned = PINS.includes(cid);
+    const pinBtn = document.createElement('button');
+    pinBtn.className = 'pin-btn' + (isPinned ? ' pinned' : '');
+    pinBtn.textContent = isPinned ? '📌' : '·';
+    pinBtn.title = isPinned ? 'Sabiti Kaldır' : 'Sabitle';
+    pinBtn.onclick = (e) => togglePin(cid, e);
+    el.insertBefore(pinBtn, el.querySelector('.hdel'));
+    if (isPinned) el.classList.add('pinned');
+  });
+};
+
+/* ── J. MARKDOWN EXPORT ── */
+window.exportChatMd = function() {
+  if (!S.chatId || !S.chats[S.chatId]) return showToast('Önce bir sohbet başlat');
+  const chat = S.chats[S.chatId];
+  let md = `# ${chat.title || 'Nova AI Sohbet'}\n_${new Date(chat.ts||Date.now()).toLocaleString('tr-TR')}_\n\n---\n\n`;
+  (chat.msgs || []).forEach(m => {
+    md += m.role === 'user' ? `**Sen:** ${m.text}\n\n` : `**Nova AI:**\n\n${m.text}\n\n---\n\n`;
+  });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([md], { type: 'text/markdown' }));
+  a.download = (chat.title || 'nova').replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-') + '.md';
+  a.click(); showToast('📄 Markdown olarak indirildi!');
+};
+
+/* ── K. AUTO-TITLE ── */
+function autoTitleChat(userMsg) {
+  if (!S.chatId || !S.chats[S.chatId]) return;
+  const chat = S.chats[S.chatId];
+  if ((chat.msgs || []).length > 2) return;
+  chat.title = userMsg.length > 32 ? userMsg.substring(0, 32) + '…' : userMsg;
+  lsS('chats', S.chats);
+  renderHistory();
+}
+
+/* ── L. TOPBAR BUTTONS ── */
+function addTopbarBtns() {
+  const tbr = document.getElementById('tbr');
+  if (!tbr) return;
+  const defs = [
+    ['🔖', 'Yer İşaretleri', 'openBmPanel()'],
+    ['📄', 'MD İndir', 'exportChatMd()'],
+  ];
+  defs.forEach(([icon, title, fn]) => {
+    if (tbr.querySelector(`[title="${title}"]`)) return;
+    const b = document.createElement('button');
+    b.className = 'tib'; b.title = title; b.textContent = icon;
+    b.setAttribute('onclick', fn);
+    tbr.appendChild(b);
+  });
+}
+
+/* ── M. VERSION UPDATE ── */
+if (window.APP) {
+  window.APP.version = '8.0.0';
+  window.APP.build = '20260613';
+}
+
+/* ── INIT ── */
+setTimeout(() => {
+  addTopbarBtns();
+  renderHistory();
+  checkAPIStatus && checkAPIStatus();
+}, 600);
+
+})(); // end Nova v8.0 IIFE
+</script>
 </body>
 </html>
