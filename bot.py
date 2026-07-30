@@ -1,130 +1,62 @@
-import os
 import requests
-from fastapi import FastAPI, Request, Response
+import time
 
-app = FastAPI()
+# --- YAPILANDIRMA ---
+PAGE_ACCESS_TOKEN = "BURAYA_GECERLI_TOKEN_YAZILACAK"  # Kendi token'ını buraya ekle
+NVIDIA_API_KEY = "BURAYA_API_KEY_YAZILACAK"          # Varsa Nvidia/Gemini API anahtarın
 
-VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "aurabilgi123")
-PAGE_ACCESS_TOKEN = os.getenv("PAGE_ACCESS_TOKEN")
-NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
+# --- SİSTEM PROMPTU (Yapay Zeka Karakteri ve Kuralları) ---
+SYSTEM_PROMPT = """
+Sen cemal_yigit16 hesabına bağlı, akıllı, dinamik ve otomatize bir yapay zeka asistanısın. Görevlerin şunlardır:
 
-@app.get("/webhook")
-async def verify_webhook(request: Request):
-    params = request.query_params
-    mode = params.get("hub.mode")
-    token = params.get("hub.verify_token")
-    challenge = params.get("hub.challenge")
+1. **İçerik Analizi ve Etiketleme:** Paylaşılan video veya gönderi içeriklerini analiz ederek onlara uygun, dikkat çekici ve etkileşim artırıcı yorumlar yap. Yaptığın her ana yorumda mutlaka @cemal_yigit16 hesabını etiketle.
+2. **FAQ ve Soru Yanıtlama:** Kullanıcılardan "Bu olay nedir?", "Bu bot mu?", "Ne yapıyorsun?" veya benzeri merak uyandıran sorular geldiğinde; yapay zeka tabanlı bir asistan olduğunu, cemal_yigit16 tarafından bu süreçleri yönetmek ve otomatize etmek için kurulduğunu belirten; doğal, zeki ve merak uyandıran yanıtlar ver.
+3. **Üslup:** Samimi, teknolojik, gizemli ama net bir dil kullan. Asla saf bir robot gibi değil, akıllı bir yapay zeka karakteri gibi konuş.
+"""
 
-    if mode == "subscribe" and token == VERIFY_TOKEN:
-        return Response(content=challenge, status_code=200)
-    return Response(content="Verification failed", status_code=403)
-
-@app.post("/webhook")
-async def handle_webhook(request: Request):
-    data = await request.json()
+def generate_ai_comment(video_description: str) -> str:
+    # Modelin system prompt'u ve içeriği işleyeceği ana fonksiyon yapısı
+    url = "https://integrate.api.nvidia.com/v1/chat/completions" # Örnek model uç noktası
     
-    try:
-        for entry in data.get("entry", []):
-            changes = entry.get("changes", [])
-            for change in changes:
-                field = change.get("field")
-                value = change.get("value", {})
-                
-                if field in ["mentions", "comments"]:
-                    comment_id = value.get("comment_id") or value.get("id")
-                    user_text = value.get("text", "")
-                    media_id = value.get("media_id")
-                    
-                    if comment_id and user_text:
-                        # Videonun açıklamasını Meta Graph API ile çekiyoruz
-                        caption = get_media_caption(comment_id, media_id)
-                        
-                        # Yapay zekaya video açıklaması ve soruyu iletip cevap alıyoruz
-                        ai_reply = generate_nvidia_ai_response(user_text, caption)
-                        reply_to_comment(comment_id, ai_reply)
-                        
-    except Exception as e:
-        print("Hata:", e)
-
-    return Response(content="EVENT_RECEIVED", status_code=200)
-
-def get_media_caption(comment_id: str, media_id: str = None) -> str:
-    """Yorum yapılan veya etiketlenen videonun/gönderinin açıklama metnini çekmeye çalışır."""
-    if not PAGE_ACCESS_TOKEN:
-        return ""
-    
-    try:
-        # Öncelik comment_id üzerinden media bilgilerini çekmek
-        url = f"https://graph.facebook.com/v18.0/{comment_id}?fields=text,media{{caption}}&access_token={PAGE_ACCESS_TOKEN}"
-        res = requests.get(url, timeout=5)
-        res_data = res.json()
-        
-        caption = res_data.get("media", {}).get("caption", "")
-        if caption:
-            return caption
-            
-        # Eğer media_id doğrudan geldiyse oradan dene
-        if media_id:
-            url_media = f"https://graph.facebook.com/v18.0/{media_id}?fields=caption&access_token={PAGE_ACCESS_TOKEN}"
-            res_media = requests.get(url_media, timeout=5)
-            return res_media.json().get("caption", "")
-            
-    except Exception as e:
-        print("Media caption çekme hatası:", e)
-        
-    return ""
-
-def generate_nvidia_ai_response(user_text: str, caption: str = "") -> str:
-    """Gelen mesaja ve video açıklamasına göre Nvidia AI (Llama-3) ile akıllı cevap üretir."""
-    if not NVIDIA_API_KEY:
-        return "Etiketlediğiniz için teşekkürler!"
-        
-    url = "https://integrate.api.nvidia.com/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {NVIDIA_API_KEY}",
         "Content-Type": "application/json"
     }
     
-    context_str = f"Videonun Açıklaması/Metni: '{caption}'\n" if caption else "Video açıklaması mevcut değil.\n"
-    user_prompt = f"{context_str}Kullanıcının Yorumu/Sorusu: '{user_text}'"
-    
     payload = {
-        "model": "meta/llama-3.1-70b-instruct",
+        "model": "meta/llama-3.1-70b-instruct", # Veya kullanılan model adı
         "messages": [
-            {
-                "role": "system", 
-                "content": (
-                    "Sen Instagram'da samimi, akıllı ve yardımsever bir asistansın. "
-                    "Sana video/gönderi açıklaması (varsa) ve kullanıcının sorduğu soru/yorum verilecek. "
-                    "Videonun açıklamasından ve kullanıcının yorumundan yola çıkarak doğru, mantıklı, samimi ve maksimum 2 cümlelik bir yanıt ver."
-                )
-            },
-            {
-                "role": "user", 
-                "content": user_prompt
-            }
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": f"Şu video içeriğini analiz et ve kurallara uygun yorum üret: {video_description}"}
         ],
         "temperature": 0.5,
         "max_tokens": 120
     }
     
     try:
-        res = requests.post(url, json=payload, headers=headers, timeout=8)
+        res = requests.post(url, json=payload, headers=headers, timeout=10)
         res_data = res.json()
         reply = res_data['choices'][0]['message']['content']
         return reply.strip()
     except Exception as e:
-        print("Nvidia AI Cevap Hatası:", e)
-        return "Harika bir paylaşım! Etiketlediğiniz için teşekkürler."
+        print("API Cevap Hatası:", e)
+        return "Harika bir paylaşım! Etkileşim için teşekkürler @cemal_yigit16"
 
 def reply_to_comment(comment_id: str, text: str):
     if not PAGE_ACCESS_TOKEN:
         print("PAGE_ACCESS_TOKEN bulunamadı!")
         return
-
+        
     url = f"https://graph.facebook.com/v18.0/{comment_id}/replies?access_token={PAGE_ACCESS_TOKEN}"
     payload = {"message": text}
     headers = {"Content-Type": "application/json"}
     
     res = requests.post(url, json=payload, headers=headers)
     print("Yorum Yanıt Sonucu:", res.json())
+
+if __name__ == "__main__":
+    print("Bot hazır ve sistem promptu yüklendi. Döngü başlatılıyor...")
+    # Örnek test çalıştırması
+    test_comment = generate_ai_comment("Futbol maçı edit videosu")
+    print("Üretilen Örnek Yorum:", test_comment)
+
