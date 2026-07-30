@@ -6,7 +6,7 @@ app = FastAPI()
 
 VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "aurabilgi123")
 PAGE_ACCESS_TOKEN = os.getenv("PAGE_ACCESS_TOKEN")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") # Render'a ekleyeceğiz
+NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY") # Render'a ekleyeceğiz
 
 @app.get("/webhook")
 async def verify_webhook(request: Request):
@@ -30,14 +30,13 @@ async def handle_webhook(request: Request):
                 field = change.get("field")
                 value = change.get("value", {})
                 
-                # Biri seni bir yorumda etiketlediğinde (mentions) veya normal yorum yapıldığında
                 if field in ["mentions", "comments"]:
                     comment_id = value.get("comment_id") or value.get("id")
                     user_text = value.get("text", "")
                     
                     if comment_id and user_text:
-                        # Soruyu yapay zekaya gönderip cevap ürettiriyoruz
-                        ai_reply = generate_ai_response(user_text)
+                        # Nvidia Yapay Zeka modeli cevabı üretiyor
+                        ai_reply = generate_nvidia_ai_response(user_text)
                         reply_to_comment(comment_id, ai_reply)
                         
     except Exception as e:
@@ -45,25 +44,40 @@ async def handle_webhook(request: Request):
 
     return Response(content="EVENT_RECEIVED", status_code=200)
 
-def generate_ai_response(user_text: str) -> str:
-    """Gelen mesaja/soruya göre Gemini AI ile akıllı cevap üretir."""
-    if not GEMINI_API_KEY:
+def generate_nvidia_ai_response(user_text: str) -> str:
+    """Gelen mesaja/soruya göre Nvidia AI (Llama-3) ile cevap üretir."""
+    if not NVIDIA_API_KEY:
         return "Etiketlediğiniz için teşekkürler! Sorunuzu inceleyip dönüyorum."
         
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
-    prompt = f"Sen samimi, yardımsever bir Instagram asistanısın. Kullanıcı seni bir videoda etiketleyip şu yorumu/soruyu yazdı: '{user_text}'. Buna Instagram yorumu formatında, samimi, kısa ve mantıklı bir cevap ver (maksimum 2 cümle)."
+    url = "https://integrate.api.nvidia.com/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {NVIDIA_API_KEY}",
+        "Content-Type": "application/json"
+    }
     
     payload = {
-        "contents": [{"parts": [{"text": prompt}]}]
+        "model": "meta/llama-3.1-70b-instruct",
+        "messages": [
+            {
+                "role": "system", 
+                "content": "Sen samimi ve pratik bir Instagram asistanısın. Sana iletilen Instagram yorumuna/sorusuna kısa, samimi, yardımsever ve maksimum 2 cümlelik doğrudan bir yanıt ver."
+            },
+            {
+                "role": "user", 
+                "content": user_text
+            }
+        ],
+        "temperature": 0.5,
+        "max_tokens": 100
     }
     
     try:
-        res = requests.post(url, json=payload, timeout=5)
+        res = requests.post(url, json=payload, headers=headers, timeout=8)
         res_data = res.json()
-        reply = res_data['candidates'][0]['content']['parts'][0]['text']
+        reply = res_data['choices'][0]['message']['content']
         return reply.strip()
     except Exception as e:
-        print("AI Cevap Hatası:", e)
+        print("Nvidia AI Cevap Hatası:", e)
         return "Harika bir paylaşım! Etiketlediğiniz için teşekkürler."
 
 def reply_to_comment(comment_id: str, text: str):
