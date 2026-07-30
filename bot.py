@@ -24,30 +24,39 @@ async def handle_webhook(request: Request):
     
     try:
         for entry in data.get("entry", []):
-            for messaging_event in entry.get("messaging", []):
-                sender_id = messaging_event.get("sender", {}).get("id")
-                message = messaging_event.get("message", {})
-                text = message.get("text", "").lower()
-
-                if sender_id and text:
-                    reply_text = "Merhaba! Ücretsiz ceket detayları ve inceleme videosu için tıklayın: https://instagram.com/reel/ceket_videosu"
-                    send_instagram_message(sender_id, reply_text)
+            # Yorum (Comment) veya Etkileşim tetiklemeleri
+            changes = entry.get("changes", [])
+            for change in changes:
+                field = change.get("field")
+                value = change.get("value", {})
+                
+                # Bir gönderiye/videoya yorum yapıldığında
+                if field == "comments":
+                    comment_id = value.get("id")
+                    comment_text = value.get("text", "").lower()
+                    
+                    if comment_id:
+                        # Yorumda ceket veya link soruluyorsa yorumun altına yanıt yaz
+                        if any(w in comment_text for w in ["ceket", "link", "ücretsiz", "fiyat", "nereden"]):
+                            reply_text = "Merhaba! Ücretsiz ceket detayları ve inceleme videosu için tıklayın: https://instagram.com/reel/ceket_videosu"
+                        else:
+                            reply_text = "Detaylar ve bilgilendirme için profildeki linke göz atabilirsiniz! 🎯"
+                        
+                        reply_to_comment(comment_id, reply_text)
+                        
     except Exception as e:
         print("Hata:", e)
 
     return Response(content="EVENT_RECEIVED", status_code=200)
 
-def send_instagram_message(recipient_id: str, text: str):
+def reply_to_comment(comment_id: str, text: str):
     if not PAGE_ACCESS_TOKEN:
         print("PAGE_ACCESS_TOKEN bulunamadı!")
         return
 
-    url = f"https://graph.facebook.com/v18.0/me/messages?access_token={PAGE_ACCESS_TOKEN}"
-    payload = {
-        "recipient": {"id": recipient_id},
-        "message": {"text": text}
-    }
+    url = f"https://graph.facebook.com/v18.0/{comment_id}/replies?access_token={PAGE_ACCESS_TOKEN}"
+    payload = {"message": text}
     headers = {"Content-Type": "application/json"}
     
     res = requests.post(url, json=payload, headers=headers)
-    print("Mesaj Gönderim Sonucu:", res.json())
+    print("Yorum Yanıt Sonucu:", res.json())
