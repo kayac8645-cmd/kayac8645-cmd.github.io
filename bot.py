@@ -6,7 +6,7 @@ app = FastAPI()
 
 VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "aurabilgi123")
 PAGE_ACCESS_TOKEN = os.getenv("PAGE_ACCESS_TOKEN")
-NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY") # Render'a ekleyeceğiz
+NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
 
 @app.get("/webhook")
 async def verify_webhook(request: Request):
@@ -33,10 +33,14 @@ async def handle_webhook(request: Request):
                 if field in ["mentions", "comments"]:
                     comment_id = value.get("comment_id") or value.get("id")
                     user_text = value.get("text", "")
+                    media_id = value.get("media_id")
                     
                     if comment_id and user_text:
-                        # Nvidia Yapay Zeka modeli cevabı üretiyor
-                        ai_reply = generate_nvidia_ai_response(user_text)
+                        # Videonun açıklamasını Meta Graph API ile çekiyoruz
+                        caption = get_media_caption(comment_id, media_id)
+                        
+                        # Yapay zekaya video açıklaması ve soruyu iletip cevap alıyoruz
+                        ai_reply = generate_nvidia_ai_response(user_text, caption)
                         reply_to_comment(comment_id, ai_reply)
                         
     except Exception as e:
@@ -44,10 +48,36 @@ async def handle_webhook(request: Request):
 
     return Response(content="EVENT_RECEIVED", status_code=200)
 
-def generate_nvidia_ai_response(user_text: str) -> str:
-    """Gelen mesaja/soruya göre Nvidia AI (Llama-3) ile cevap üretir."""
+def get_media_caption(comment_id: str, media_id: str = None) -> str:
+    """Yorum yapılan veya etiketlenen videonun/gönderinin açıklama metnini çekmeye çalışır."""
+    if not PAGE_ACCESS_TOKEN:
+        return ""
+    
+    try:
+        # Öncelik comment_id üzerinden media bilgilerini çekmek
+        url = f"https://graph.facebook.com/v18.0/{comment_id}?fields=text,media{{caption}}&access_token={PAGE_ACCESS_TOKEN}"
+        res = requests.get(url, timeout=5)
+        res_data = res.json()
+        
+        caption = res_data.get("media", {}).get("caption", "")
+        if caption:
+            return caption
+            
+        # Eğer media_id doğrudan geldiyse oradan dene
+        if media_id:
+            url_media = f"https://graph.facebook.com/v18.0/{media_id}?fields=caption&access_token={PAGE_ACCESS_TOKEN}"
+            res_media = requests.get(url_media, timeout=5)
+            return res_media.json().get("caption", "")
+            
+    except Exception as e:
+        print("Media caption çekme hatası:", e)
+        
+    return ""
+
+def generate_nvidia_ai_response(user_text: str, caption: str = "") -> str:
+    """Gelen mesaja ve video açıklamasına göre Nvidia AI (Llama-3) ile akıllı cevap üretir."""
     if not NVIDIA_API_KEY:
-        return "Etiketlediğiniz için teşekkürler! Sorunuzu inceleyip dönüyorum."
+        return "Etiketlediğiniz için teşekkürler!"
         
     url = "https://integrate.api.nvidia.com/v1/chat/completions"
     headers = {
@@ -55,20 +85,27 @@ def generate_nvidia_ai_response(user_text: str) -> str:
         "Content-Type": "application/json"
     }
     
+    context_str = f"Videonun Açıklaması/Metni: '{caption}'\n" if caption else "Video açıklaması mevcut değil.\n"
+    user_prompt = f"{context_str}Kullanıcının Yorumu/Sorusu: '{user_text}'"
+    
     payload = {
         "model": "meta/llama-3.1-70b-instruct",
         "messages": [
             {
                 "role": "system", 
-                "content": "Sen samimi ve pratik bir Instagram asistanısın. Sana iletilen Instagram yorumuna/sorusuna kısa, samimi, yardımsever ve maksimum 2 cümlelik doğrudan bir yanıt ver."
+                "content": (
+                    "Sen Instagram'da samimi, akıllı ve yardımsever bir asistansın. "
+                    "Sana video/gönderi açıklaması (varsa) ve kullanıcının sorduğu soru/yorum verilecek. "
+                    "Videonun açıklamasından ve kullanıcının yorumundan yola çıkarak doğru, mantıklı, samimi ve maksimum 2 cümlelik bir yanıt ver."
+                )
             },
             {
                 "role": "user", 
-                "content": user_text
+                "content": user_prompt
             }
         ],
         "temperature": 0.5,
-        "max_tokens": 100
+        "max_tokens": 120
     }
     
     try:
