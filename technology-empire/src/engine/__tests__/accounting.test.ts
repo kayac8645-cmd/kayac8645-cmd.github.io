@@ -12,17 +12,19 @@ import { findNonFinite, ledgerCashFlow, makeGame } from './helpers';
 
 const LEDGER_KEYS = Object.keys(emptyLedger()) as (keyof Ledger)[];
 
-interface Snap { cash: number; debt: number; ledger: Ledger; reports: number; bankrupt: boolean; shares: string }
+interface Snap { cash: number; debt: number; ledger: Ledger; bankrupt: boolean; shares: string; holders: string[] }
 
 const snap = (c: Company): Snap => ({
-  cash: c.cash, debt: debtOf(c), ledger: { ...c.ledger }, reports: c.reports.length, bankrupt: c.bankrupt,
+  cash: c.cash, debt: debtOf(c), ledger: { ...c.ledger }, bankrupt: c.bankrupt,
   shares: JSON.stringify([c.sharesOutstanding, c.shareholders, c.holdingId]),
+  holders: [c.holdingId, ...Object.keys(c.shareholders)],
 });
 
 /** Ledger accumulated during this step (handles the month-end reset into reports). */
-function ledgerDelta(c: Company, before: Snap): Ledger {
+function ledgerDelta(c: Company, before: Snap, day: number): Ledger {
   const d = emptyLedger();
-  const rolled = c.reports.length > before.reports || (c.reports.length === before.reports && c.reports.length >= 36 && c.ledger.revenue < before.ledger.revenue);
+  // month end (day % 30 === 0) converts the ledger into a report and resets it
+  const rolled = day % 30 === 0;
   const monthTotal: Ledger = emptyLedger();
   if (rolled && c.reports.length > 0) {
     const r = c.reports[c.reports.length - 1];
@@ -49,10 +51,10 @@ function simulate(s: GameState, days: number) {
       if (!b) { holdingDirty.add(c.holdingId); continue; } // founded today
       if (b.bankrupt || c.bankrupt || b.shares !== snap(c).shares) {
         holdingDirty.add(c.holdingId);
-        for (const h of Object.keys(c.shareholders)) holdingDirty.add(h);
+        for (const h of [...Object.keys(c.shareholders), ...b.holders]) holdingDirty.add(h);
         continue;
       }
-      const dl = ledgerDelta(c, b);
+      const dl = ledgerDelta(c, b, s.day);
       const r = (c.cash - b.cash) - ledgerCashFlow(dl) - (debtOf(c) - b.debt);
       residual.set(c.id, r);
       checkedCompanyDays++;
@@ -68,7 +70,7 @@ function simulate(s: GameState, days: number) {
         const b = before.get(c.id);
         if (!b) continue;
         const own = (c.shareholders[h.id] ?? 0) / c.sharesOutstanding;
-        if (own > 0) r -= own * ledgerDelta(c, b).dividends;
+        if (own > 0) r -= own * ledgerDelta(c, b, s.day).dividends;
         if (c.holdingId === h.id) { r += residual.get(c.id) ?? 0; scale += Math.abs(c.cash); }
       }
       checkedHoldingDays++;

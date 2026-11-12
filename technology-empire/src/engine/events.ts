@@ -8,7 +8,7 @@
 //   when they reach 0 the multiplier (supplyShock / trend) is reset to 1.
 // - stats.lastEventDay is set whenever a random event fires (min gap EVENT_MIN_GAP days).
 import type { Company, Country, Facility, GameState, GoodId, Macro, PlatformCatId, Product } from './types';
-import { CATEGORIES, GOODS, GOOD_IDS, PLATFORMS, PLATFORM_IDS, RAW_GOODS, SECTORS, TECHS } from './data/defs';
+import { CATEGORIES, GOODS, GOOD_IDS, PLATFORMS, PLATFORM_IDS, RAW_GOODS, SECTORS } from './data/defs';
 import { createCountries } from './data/countries';
 import { chance, gauss, pick, rand, randInt, randRange } from './rng';
 import { addNews, clamp } from './util';
