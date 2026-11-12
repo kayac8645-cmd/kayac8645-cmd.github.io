@@ -10,6 +10,7 @@ module.exports = function load(htmlPath){
     module: { exports: {} } };
   ctx.globalThis = ctx; ctx.window = ctx; ctx.self = ctx;
   vm.createContext(ctx);
-  vm.runInContext(engine + '\n;globalThis.__E = { newGame, tick, get S(){ return null; } };', ctx, { filename: 'engine.js' });
-  return ctx;
+  vm.runInContext(engine, ctx, { filename: 'engine.js' });
+  // const/let bildirimleri global nesnede görünmez: ada göre değerlendiren vekil
+  return new Proxy(ctx, { get(t, k){ if (typeof k !== 'string') return t[k]; if (k in t) return t[k]; if (!/^[A-Za-z_$][\w$]*$/.test(k)) return undefined; return vm.runInContext(`typeof ${k} !== 'undefined' ? ${k} : undefined`, t); } });
 };

@@ -1,0 +1,24 @@
+/* Sosyal Motor 2 */
+.smgrid{margin-bottom:12px}
+.smcard{min-width:0}
+.smtbl{overflow-x:auto;margin-top:6px}
+.smtbl table{width:100%;border-collapse:separate;border-spacing:2px;font-size:12px;font-variant-numeric:tabular-nums}
+.smtbl th{font-weight:600;color:var(--mut, #8a97a6);padding:3px 4px;text-align:center;white-space:nowrap}
+.smtbl th.l{text-align:left;color:inherit}
+.smtbl td.smc{text-align:center;padding:4px 1px;border-radius:5px;min-width:30px}
+.smtbl th{font-size:11px}
+.smtbl tr.tot th,.smtbl tr.tot td{font-weight:700}
+.smspark{width:120px;height:32px;flex:none}
+.smspark polyline{fill:none;stroke:var(--good);stroke-width:1.6;vector-effect:non-scaling-stroke}
+.smspark line.z{stroke:var(--line2);stroke-width:1;stroke-dasharray:3 3;vector-effect:non-scaling-stroke}
+.smag{padding:7px 0;border-bottom:1px solid var(--line)}
+.smag:last-of-type{border-bottom:0}
+.smbar{height:4px;border-radius:3px;background:var(--panel2);margin-top:4px;overflow:hidden}
+.smbar i{display:block;height:100%;border-radius:3px}
+.smwhy{gap:8px;padding:4px 0;border-bottom:1px dashed var(--line)}
+.smwhy .dim:first-child{min-width:64px}
+.cbadge.smfix{background:color-mix(in srgb, var(--warn) 22%, transparent);color:var(--warn)}
+.cbadge.smreb{background:color-mix(in srgb, var(--bad) 18%, transparent);color:var(--bad)}
+.cbadge.smagr{background:color-mix(in srgb, var(--good) 18%, transparent);color:var(--good)}
+.cbadge.smask{background:color-mix(in srgb, var(--line2) 45%, transparent)}
+@media (max-width:520px){.smtbl table{font-size:11px;border-spacing:1px}.smtbl td.smc{min-width:0}.smtbl th{padding:3px 1px}}
