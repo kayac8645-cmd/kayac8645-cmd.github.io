@@ -1,0 +1,33 @@
+.picker { gap: 8px; align-items: center; }
+.opt-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.opt-btn { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 6px 10px; font-size: 13px; }
+.opt-btn.sel { outline: 2px solid var(--accent); }
+.opt-btn small { font-size: 11px; opacity: 0.75; }
+.tech-cols { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(210px, 1fr); gap: 12px; overflow-x: auto; padding-bottom: 8px; }
+.tech-col { display: flex; flex-direction: column; gap: 8px; }
+.tech-node { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; text-align: left; display: flex; flex-direction: column; gap: 4px; cursor: pointer; font-size: 13px; }
+.tech-node.owned { border-color: #22c55e; }
+.tech-node.available { border-color: var(--accent); }
+.tech-node.progress { border-color: #f59e0b; }
+.tech-node.locked { opacity: 0.55; }
+.tech-node.sel { outline: 2px solid var(--accent); }
+.map-wrap { width: 100%; }
+.map-wrap svg { width: 100%; height: auto; display: block; }
+.map-wrap path.land { stroke: rgba(128,128,128,0.45); stroke-width: 0.4; }
+.map-wrap path.play { cursor: pointer; }
+.map-wrap path.play:hover { stroke: #fff; stroke-width: 1; }
+.map-wrap path.sel { stroke: #fff; stroke-width: 1.6; }
+.chain { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+.chain-col { border: 1px solid var(--border); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.news-item { border-bottom: 1px solid var(--border); padding: 8px 0; text-align: left; }
+.news-item.important { border-left: 3px solid #f59e0b; padding-left: 8px; }
+.split { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+@media (max-width: 900px) { .split { grid-template-columns: minmax(0, 1fr); } }
+.kv { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; font-size: 13px; text-align: left; }
+.kv > :nth-child(even) { text-align: right; }
+.inl { display: inline-flex; gap: 6px; align-items: center; }
+.inl input[type=number] { width: 90px; }
+.fin-t { width: 100%; font-size: 13px; }
+.fin-t td, .fin-t th { padding: 3px 6px; }
+.fin-t td:not(:first-child), .fin-t th:not(:first-child) { text-align: right; }
+.fin-t tr.tot td { font-weight: 600; border-top: 1px solid var(--border); }
