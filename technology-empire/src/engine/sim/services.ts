@@ -103,7 +103,7 @@ interface OfferCtx {
 function runDataCenters(s: GameState): void {
   const companies = Object.values(s.companies).filter((c) => !c.bankrupt);
 
-  // 1. Breakdown countdown (broken DCs are offline the whole day they are counting down).
+  // 1. Reset per-day output (broken DCs offer 0 capacity; downDays is counted down in step 3).
   for (const c of companies) for (const f of c.facilities) {
     if (f.type !== 'dataCenter') continue;
     f.lastOutput = 0;
