@@ -4,6 +4,7 @@
 - `src/tr.js` — Türkçe ek motoru (ünlü uyumu, kaynaştırma, sayı/kısaltma okunuşu)
 - `src/sm2-engine.js` — Sosyal Motor 2: olay kanalı, kesim × konu kamuoyu haritası, gündem, gerçeklik/tekrar denetimi, bağlamlı yanıtlar, tartışma zincirleri, rakip PR
 - `src/sm2-ui.js`, `src/sm2-ui.css` — Gündem sayfası panelleri ve yorum rozetleri
+- `src/hb-engine.js`, `src/hb-ui.js`, `src/hb-ui.css` — Holding 2: tedarik zinciri şirketlerinde toplu alım/satış, politika şablonları, toplu ambargo ve yatırım, teklif kuralları, otomatik yönetici
 - `dist/compute-empire-v13.html` — oynanabilir tek dosya (üretilir)
 
 ```

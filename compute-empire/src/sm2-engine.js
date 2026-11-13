@@ -221,14 +221,19 @@ const SM_NEG = /kötü|pahalı|yavaş|kesinti|çök|geride|hayal kırıklığı|
 const SM_POS = /harika|iyi|güçlü|önde|makul|sorunsuz|tebrik|helal|bravo|başarı|sevindim|bayıldım|memnun|ucuz|rahat|güzel|hak edil|sağlık|💪|🔥|👏|🚀|😍|istikrar/;
 const SM_CT = ['q', 'p', 'r', 't', 's', 'o', 'u'];
 function smPolOf(l){ const n = SM_NEG.test(l), p = SM_POS.test(l); return n && !p ? -1 : p && !n ? 1 : 0; }
+const _smCC = new Map();
 function smClaim(text){
+  const key = String(text || ''); const hit = _smCC.get(key); if (hit) return hit;
+  const r = smClaim0(key); if (_smCC.size > 3000) _smCC.clear(); _smCC.set(key, r); return r;
+}
+function smClaim0(text){
   const l = String(text || '').toLocaleLowerCase('tr').replace(/[@#]\S+/g, '');
   const ts = SM_CT.filter(t => SM_LEX[t].test(l));
   // "X ama Y" yapısında yargıyı Y taşır
   const k = Math.max(l.lastIndexOf(' ama '), l.lastIndexOf(' fakat '), l.lastIndexOf(' ancak '));
   let pol = k > 0 ? smPolOf(l.slice(k)) : 0;
   if (!pol) pol = smPolOf(l);
-  const lv = l.replace(/[\p{L}]+(?:\s[\p{L}]+)?\s\d+(?:\.\d+)+/gu, ' ').replace(/[\p{L}]+\s\d{1,2}(?![\d.,%])/gu, ' ');
+  const lv = /\d/.test(l) ? l.replace(/[a-zçğıöşü]+(?: [a-zçğıöşü]+)? \d+(?:\.\d+)+/g, ' ').replace(/[a-zçğıöşü]+ \d{1,2}(?![\d.,%])/g, ' ') : l;
   const nums = (lv.match(/%?\d+(?:[.,]\d+)?/g) || []).filter(x => x.replace(/\D/g, '').length >= 2 || x[0] === '%');
   return { ts, pol, nums, q: /\?/.test(l) };
 }
@@ -249,21 +254,34 @@ function smClaimOf(c){
 /* ---------- 6) Metin cilası ---------- */
 // Özel isimlerin yazımını koru (argo/kısaltma üslubu küçük harfe çevirse bile)
 let _smNames = null;
+const smLow = x => x.toLocaleLowerCase('tr').replace(/ı/g, 'i');
 function smNames(S){
   if (_smNames && _smNames.S === S && _smNames.d === S.day && _smNames.n === S.models.length) return _smNames;
   const set = new Set();
   if (S.brand) set.add(S.brand + ' Labs'), set.add(S.brand);
-  for (const m of S.models) set.add(m.name);
-  if (typeof RIVALS !== 'undefined') RIVALS.forEach((R, i) => { set.add(R.name); const r = S.rivals && S.rivals[i]; if (r && r.models) for (const m of r.models.slice(-3)) if (m && m.name) set.add(m.name); });
-  const list = [...set].filter(x => x && x.length >= 3 && /^[A-ZÇĞİÖŞÜ]/.test(x)).sort((a, b) => b.length - a.length);
-  const esc = x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const re = list.length ? new RegExp('(^|[^\\p{L}\\d])(' + list.map(esc).join('|') + ')(?![\\p{L}\\d])', 'giu') : null;
-  const canon = new Map(list.map(x => [x.toLocaleLowerCase('tr'), x]));
-  return (_smNames = { S, d: S.day, n: S.models.length, re, canon });
+  for (const m of S.models.slice(-12)) set.add(m.name);
+  if (typeof RIVALS !== 'undefined') RIVALS.forEach((R, i) => { set.add(R.name); const r = S.rivals && S.rivals[i]; if (r && r.models) for (const m of r.models.slice(-2)) if (m && m.name) set.add(m.name); });
+  // ilk sözcüğün küçük harfi → olası isimler (uzundan kısaya)
+  const first = new Map();
+  for (const x of set){ if (!x || x.length < 3 || !/^[A-ZÇĞİÖŞÜ]/.test(x)) continue; const w = x.split(' '), k = smLow(w[0]); if (!first.has(k)) first.set(k, []); first.get(k).push(w); }
+  for (const l of first.values()) l.sort((a, b) => b.length - a.length);
+  return (_smNames = { S, d: S.day, n: S.models.length, first });
 }
 function smFixNames(S, t){
-  const N = smNames(S); if (!N.re) return t;
-  return t.replace(N.re, (all, pre, w) => pre + (N.canon.get(w.toLocaleLowerCase('tr')) || w));
+  const N = smNames(S); if (!N.first.size) return t;
+  const parts = t.split(/(\s+)/);
+  for (let i = 0; i < parts.length; i += 2){
+    const raw = parts[i]; if (!raw || !/^[a-zçğıöşü]/.test(raw)) continue;
+    const core = raw.replace(/[^0-9A-Za-zÇĞİÖŞÜçğıöşü.]+$/, '').replace(/\.$/, ''), L = N.first.get(smLow(core)); if (!L) continue;
+    for (const w of L){
+      let ok = true; for (let j = 1; j < w.length; j++){ const p = parts[i + 2 * j]; if (!p){ ok = false; break; } const p2 = p.replace(/[^0-9A-Za-zÇĞİÖŞÜçğıöşü.]+$/, '').replace(/\.$/, '').split("'")[0]; if (smLow(p2) !== smLow(w[j])){ ok = false; break; } }
+      if (!ok) continue;
+      parts[i] = w[0] + raw.slice(core.length);
+      for (let j = 1; j < w.length; j++){ const p = parts[i + 2 * j], c = p.replace(/[^0-9A-Za-zÇĞİÖŞÜçğıöşü.]+$/, '').replace(/\.$/, '').split("'")[0]; parts[i + 2 * j] = w[j] + p.slice(c.length); }
+      break;
+    }
+  }
+  return parts.join('');
 }
 function smTag(name){ return '#' + String(name).replace(/\.0\b/g, '').replace(/(\d)\.(\d)/g, '$1$2').split(/[^0-9A-Za-zÇĞİÖŞÜçğıöşü]+/).filter(Boolean).map(w => w[0].toLocaleUpperCase('tr') + w.slice(1)).join(''); }
 function smPolish(S, t, keepLow){
@@ -281,7 +299,7 @@ function smPolish(S, t, keepLow){
 }
 
 /* ---------- 7) Tekrar ve doygunluk denetimi ---------- */
-const smNorm = t => String(t).toLocaleLowerCase('tr').replace(/@\S+/g, '').replace(/\d+([.,]\d+)?/g, '#').replace(/[^\p{L}#\s]/gu, ' ').replace(/\s+/g, ' ').trim();
+const smNorm = t => String(t).toLocaleLowerCase('tr').replace(/@\S+/g, '').replace(/\d+([.,]\d+)?/g, '#').replace(/[^a-zçğıöşüâîû#\s]/g, ' ').replace(/\s+/g, ' ').trim();
 function smShingles(t){ const w = smNorm(t).split(' '), o = []; for (let i = 0; i + 2 < w.length; i++) o.push(hashStr(w[i] + ' ' + w[i + 1] + ' ' + w[i + 2]) % 1048576); if (!o.length) o.push(hashStr(w.join(' ')) % 1048576); return o; }
 // Halka kayıtta dizi olarak durur; ters dizin (kalıp → kayıt) bellekte, gerektiğinde yeniden kurulur
 let _smIx = null;

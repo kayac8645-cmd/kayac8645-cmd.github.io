@@ -31,6 +31,39 @@
 .cbadge.smask{background:color-mix(in srgb, var(--line2) 45%, transparent)}
 @media (max-width:520px){.smtbl table{font-size:11px;border-spacing:1px}.smtbl td.smc{min-width:0}.smtbl th{padding:3px 1px}}
 
+/* Holding 2: toplu işlemler */
+.hbcard{min-width:0}
+.hbsecs{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:6px;margin:6px 0 8px}
+.hbsec{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;padding:8px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:inherit;font:inherit;font-size:11px;cursor:pointer;min-width:0}
+.hbsec b{font-size:13px}
+.hbsec.on{border-color:var(--heat, var(--warn));box-shadow:0 0 0 1px var(--heat, var(--warn)) inset}
+.hbsec span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.hbrisk{display:block;width:100%;height:4px;border-radius:3px;background:var(--line);overflow:hidden;margin-top:2px}
+.hbrisk i{display:block;height:100%}
+.hbtbl{overflow-x:auto;margin-top:6px;max-height:420px;overflow-y:auto;border:1px solid var(--line);border-radius:10px}
+.hbtbl table{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
+.hbtbl th{position:sticky;top:0;background:var(--panel2);font-weight:600;text-align:left;padding:6px 5px;white-space:nowrap;z-index:1}
+.hbtbl td{padding:6px 5px;border-top:1px solid var(--line);vertical-align:middle;white-space:nowrap}
+.hbtbl td.nm{white-space:normal;min-width:120px}
+.hbtbl td.nm b{display:block}
+.hbtbl td span.dim{display:block;font-size:10px}
+.hbtbl .r{text-align:right}
+.hbtbl tr.on td{background:color-mix(in srgb, var(--good) 9%, transparent)}
+.hbtbl input[type=checkbox]{width:18px;height:18px}
+.hbbar{display:flex;justify-content:space-between;align-items:center;margin:8px 0}
+.hbmodes{margin-top:4px}
+.hbprev{margin-top:10px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--panel2);min-width:0}
+.hbrow{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12px;padding:4px 0;border-bottom:1px dashed var(--line)}
+.hbrow:last-of-type{border-bottom:0}
+.hbprev dl.kv.hbkv{margin-top:8px;display:block;grid-template-columns:none}
+.hbprev dl.kv.hbkv dt{margin-top:6px;font-size:11px}
+.hbprev dl.kv.hbkv dd{margin:2px 0 0;text-align:left;font-size:12px}
+.hbchk{display:flex;gap:6px;align-items:flex-start;margin-top:6px}
+.hbchk input{margin-top:2px}
+.hbtpls{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;margin-top:8px}
+.hbtpls .choice.on{border-color:var(--heat, var(--warn));box-shadow:0 0 0 1px var(--heat, var(--warn)) inset}
+@media (max-width:520px){.hbtbl th:nth-child(5),.hbtbl td:nth-child(5){display:none}.hbsecs{grid-template-columns:repeat(2,1fr)}}
+
 </style>
 </head>
 <body>
@@ -12868,14 +12901,19 @@ const SM_NEG = /kötü|pahalı|yavaş|kesinti|çök|geride|hayal kırıklığı|
 const SM_POS = /harika|iyi|güçlü|önde|makul|sorunsuz|tebrik|helal|bravo|başarı|sevindim|bayıldım|memnun|ucuz|rahat|güzel|hak edil|sağlık|💪|🔥|👏|🚀|😍|istikrar/;
 const SM_CT = ['q', 'p', 'r', 't', 's', 'o', 'u'];
 function smPolOf(l){ const n = SM_NEG.test(l), p = SM_POS.test(l); return n && !p ? -1 : p && !n ? 1 : 0; }
+const _smCC = new Map();
 function smClaim(text){
+  const key = String(text || ''); const hit = _smCC.get(key); if (hit) return hit;
+  const r = smClaim0(key); if (_smCC.size > 3000) _smCC.clear(); _smCC.set(key, r); return r;
+}
+function smClaim0(text){
   const l = String(text || '').toLocaleLowerCase('tr').replace(/[@#]\S+/g, '');
   const ts = SM_CT.filter(t => SM_LEX[t].test(l));
   // "X ama Y" yapısında yargıyı Y taşır
   const k = Math.max(l.lastIndexOf(' ama '), l.lastIndexOf(' fakat '), l.lastIndexOf(' ancak '));
   let pol = k > 0 ? smPolOf(l.slice(k)) : 0;
   if (!pol) pol = smPolOf(l);
-  const lv = l.replace(/[\p{L}]+(?:\s[\p{L}]+)?\s\d+(?:\.\d+)+/gu, ' ').replace(/[\p{L}]+\s\d{1,2}(?![\d.,%])/gu, ' ');
+  const lv = /\d/.test(l) ? l.replace(/[a-zçğıöşü]+(?: [a-zçğıöşü]+)? \d+(?:\.\d+)+/g, ' ').replace(/[a-zçğıöşü]+ \d{1,2}(?![\d.,%])/g, ' ') : l;
   const nums = (lv.match(/%?\d+(?:[.,]\d+)?/g) || []).filter(x => x.replace(/\D/g, '').length >= 2 || x[0] === '%');
   return { ts, pol, nums, q: /\?/.test(l) };
 }
@@ -12896,21 +12934,34 @@ function smClaimOf(c){
 /* ---------- 6) Metin cilası ---------- */
 // Özel isimlerin yazımını koru (argo/kısaltma üslubu küçük harfe çevirse bile)
 let _smNames = null;
+const smLow = x => x.toLocaleLowerCase('tr').replace(/ı/g, 'i');
 function smNames(S){
   if (_smNames && _smNames.S === S && _smNames.d === S.day && _smNames.n === S.models.length) return _smNames;
   const set = new Set();
   if (S.brand) set.add(S.brand + ' Labs'), set.add(S.brand);
-  for (const m of S.models) set.add(m.name);
-  if (typeof RIVALS !== 'undefined') RIVALS.forEach((R, i) => { set.add(R.name); const r = S.rivals && S.rivals[i]; if (r && r.models) for (const m of r.models.slice(-3)) if (m && m.name) set.add(m.name); });
-  const list = [...set].filter(x => x && x.length >= 3 && /^[A-ZÇĞİÖŞÜ]/.test(x)).sort((a, b) => b.length - a.length);
-  const esc = x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const re = list.length ? new RegExp('(^|[^\\p{L}\\d])(' + list.map(esc).join('|') + ')(?![\\p{L}\\d])', 'giu') : null;
-  const canon = new Map(list.map(x => [x.toLocaleLowerCase('tr'), x]));
-  return (_smNames = { S, d: S.day, n: S.models.length, re, canon });
+  for (const m of S.models.slice(-12)) set.add(m.name);
+  if (typeof RIVALS !== 'undefined') RIVALS.forEach((R, i) => { set.add(R.name); const r = S.rivals && S.rivals[i]; if (r && r.models) for (const m of r.models.slice(-2)) if (m && m.name) set.add(m.name); });
+  // ilk sözcüğün küçük harfi → olası isimler (uzundan kısaya)
+  const first = new Map();
+  for (const x of set){ if (!x || x.length < 3 || !/^[A-ZÇĞİÖŞÜ]/.test(x)) continue; const w = x.split(' '), k = smLow(w[0]); if (!first.has(k)) first.set(k, []); first.get(k).push(w); }
+  for (const l of first.values()) l.sort((a, b) => b.length - a.length);
+  return (_smNames = { S, d: S.day, n: S.models.length, first });
 }
 function smFixNames(S, t){
-  const N = smNames(S); if (!N.re) return t;
-  return t.replace(N.re, (all, pre, w) => pre + (N.canon.get(w.toLocaleLowerCase('tr')) || w));
+  const N = smNames(S); if (!N.first.size) return t;
+  const parts = t.split(/(\s+)/);
+  for (let i = 0; i < parts.length; i += 2){
+    const raw = parts[i]; if (!raw || !/^[a-zçğıöşü]/.test(raw)) continue;
+    const core = raw.replace(/[^0-9A-Za-zÇĞİÖŞÜçğıöşü.]+$/, '').replace(/\.$/, ''), L = N.first.get(smLow(core)); if (!L) continue;
+    for (const w of L){
+      let ok = true; for (let j = 1; j < w.length; j++){ const p = parts[i + 2 * j]; if (!p){ ok = false; break; } const p2 = p.replace(/[^0-9A-Za-zÇĞİÖŞÜçğıöşü.]+$/, '').replace(/\.$/, '').split("'")[0]; if (smLow(p2) !== smLow(w[j])){ ok = false; break; } }
+      if (!ok) continue;
+      parts[i] = w[0] + raw.slice(core.length);
+      for (let j = 1; j < w.length; j++){ const p = parts[i + 2 * j], c = p.replace(/[^0-9A-Za-zÇĞİÖŞÜçğıöşü.]+$/, '').replace(/\.$/, '').split("'")[0]; parts[i + 2 * j] = w[j] + p.slice(c.length); }
+      break;
+    }
+  }
+  return parts.join('');
 }
 function smTag(name){ return '#' + String(name).replace(/\.0\b/g, '').replace(/(\d)\.(\d)/g, '$1$2').split(/[^0-9A-Za-zÇĞİÖŞÜçğıöşü]+/).filter(Boolean).map(w => w[0].toLocaleUpperCase('tr') + w.slice(1)).join(''); }
 function smPolish(S, t, keepLow){
@@ -12928,7 +12979,7 @@ function smPolish(S, t, keepLow){
 }
 
 /* ---------- 7) Tekrar ve doygunluk denetimi ---------- */
-const smNorm = t => String(t).toLocaleLowerCase('tr').replace(/@\S+/g, '').replace(/\d+([.,]\d+)?/g, '#').replace(/[^\p{L}#\s]/gu, ' ').replace(/\s+/g, ' ').trim();
+const smNorm = t => String(t).toLocaleLowerCase('tr').replace(/@\S+/g, '').replace(/\d+([.,]\d+)?/g, '#').replace(/[^a-zçğıöşüâîû#\s]/g, ' ').replace(/\s+/g, ' ').trim();
 function smShingles(t){ const w = smNorm(t).split(' '), o = []; for (let i = 0; i + 2 < w.length; i++) o.push(hashStr(w[i] + ' ' + w[i + 1] + ' ' + w[i + 2]) % 1048576); if (!o.length) o.push(hashStr(w.join(' ')) % 1048576); return o; }
 // Halka kayıtta dizi olarak durur; ters dizin (kalıp → kayıt) bellekte, gerektiğinde yeniden kurulur
 let _smIx = null;
@@ -13403,6 +13454,289 @@ const _smNewGame = newGame;
 newGame = function(a, b){ const S = _smNewGame(a, b); if (S) S.sm = smState(); return S; };
 if (typeof MIGRATIONS !== 'undefined') MIGRATIONS.push(st => { if (st && st.social) smEnsure(st); });
 if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { smEnsure, smEmit, smShift, smOverall, smSegScore, smTopicScore, smFacts, smClaim, smReplyTo, TR });
+
+/* ============================================================
+   COMPUTE EMPIRE v13 — HOLDING 2: TOPLU SATIN ALMA VE YÖNETİM (HB)
+   Tedarik zinciri şirketleri (maden · HBM · GPU · elektrik · RAM/depolama · EXONS) için:
+   toplu alım (hedef pay / bütçe), rakip paylarına otomatik teklif, piyasa tepkisi, toplu satış,
+   politika şablonları, toplu ambargo ve yatırım, kâr içte tutma → kapasite, gelen teklif kuralları,
+   otomatik holding yöneticisi. Tüm işlemler mevcut tekil eylemlerden geçer: kurallar aynı kalır.
+   Durum: S.hb
+   ============================================================ */
+const HB_LV = [[0.01, 'Temettü'], [0.10, 'Kurul'], [0.25, 'Veto'], [0.51, 'Kontrol'], [1, 'Tam sahip']];
+const HB_TPL = {
+  cheap:   { n: 'Ucuz tedarik',    d: 'Kendi maliyetin düşer, kâr azalır.',               m: { sp: 0.6, rp: 1, qt: 0.3, dv: 0.5 } },
+  profit:  { n: 'Kâr makinesi',    d: 'Rakiplere pahalı sat, kârın hepsini aktar.',       m: { sp: 1, rp: 1.5, qt: 0, dv: 1 } },
+  squeeze: { n: 'Rakibi sık',      d: 'Rakip maliyeti zirve, önde gelen 2 rakibe ambargo. Ceza riski çok yüksek.', m: { sp: 0.8, rp: 2, qt: 0.6, dv: 0.7 }, emb: 2 },
+  safe:    { n: 'Denetim dostu',   d: 'Ambargolar kalkar, fiyatlar ılımlı. Ceza riski düşer.', m: { sp: 0.85, rp: 1, qt: 0.1, dv: 0.7 }, emb: -1 },
+  growth:  { n: 'Büyüme',          d: 'Kârın %80\'i içte kalır ve otomatik kapasite yatırımına döner.', m: { sp: 0.9, rp: 1.1, qt: 0.1, dv: 0.2 } },
+};
+const HB_HEAT_STEP = 0.03, HB_HEAT_MAX = 0.25, HB_HEAT_DECAY = 0.97;   // piyasa tepkisi
+const HB_BID_P = 0.6;                                                  // otomatik teklif hedef kabul olasılığı
+const HB_AUTO_FEE = 0.00004;                                           // otomatik yönetici: pay değerinin günlük oranı (~%0,12/ay)
+
+function hbState(){ return { v: 1, heat: {}, tpl: {}, auto: { on: false, cashMin: 0, log: [], next: 0, defend: true, risk: true, payout: true, cap: true }, rule: { on: false, acc: 1.5, rej: 1.1, ctr: 1.25 }, ops: [], st: { bought: 0, spent: 0, bids: 0, auto: 0 } }; }
+function hbEnsure(S){
+  if (!S.hb || S.hb.v !== 1) S.hb = hbState();
+  const b = hbState(); for (const k in b) if (!(k in S.hb)) S.hb[k] = b[k];
+  for (const k in b.auto) if (!(k in S.hb.auto)) S.hb.auto[k] = b.auto[k];
+  for (const k in b.rule) if (!(k in S.hb.rule)) S.hb.rule[k] = b.rule[k];
+  return S.hb;
+}
+const hbHeat = (S, sec) => (S.hb && S.hb.heat[sec]) || 0;
+function hbLvlName(o){ let n = ''; for (const [t, x] of HB_LV) if (o >= t - 1e-9) n = x; return n; }
+function hbOp(S, t){ const H = hbEnsure(S); H.ops.unshift({ d: S.day, t }); if (H.ops.length > 20) H.ops.length = 20; }
+
+/* ---------- Piyasa tepkisi: oyuncu alımı sektör fiyatını ısıtır ---------- */
+const _hbBuyPrice = hdBuyPrice;
+hdBuyPrice = function(S, id, d, who){ const p = _hbBuyPrice(S, id, d, who); return who === -1 ? Math.round(p * (1 + hbHeat(S, HD_BY[id].sec))) : p; };
+const _hbActBuy = actHoldBuy;
+actHoldBuy = function(S, id, d){
+  const r = _hbActBuy(S, id, d);
+  if (r && r.ok !== false){ const H = hbEnsure(S), sec = HD_BY[id].sec; H.heat[sec] = Math.min(HB_HEAT_MAX, (H.heat[sec] || 0) + HB_HEAT_STEP * Math.min(1, d / 0.1 + 0.3)); }
+  return r;
+};
+
+/* ---------- Simülasyon yardımcıları (geçici değişiklik → ölç → geri al) ---------- */
+function hbWith(S, mut, fn){
+  const H = S.hold, saved = {};
+  for (const id in mut){ const c = H.cos[id]; saved[id] = { own: c.own, m: { ...c.m, emb: { ...c.m.emb } } }; const x = mut[id]; if (x.own != null) c.own = x.own; if (x.m) Object.assign(c.m, x.m); if (x.emb) c.m.emb = x.emb; }
+  hdCacheClr();
+  try { return fn(); } finally { for (const id in saved){ const c = H.cos[id]; c.own = saved[id].own; c.m = saved[id].m; } hdCacheClr(); }
+}
+function hbSnapshot(S){
+  let net = 0, adm = 0, gross = 0, tv = 0;
+  for (const id in S.hold.cos){ const c = S.hold.cos[id]; if (c.own >= 0.01){ const d = hdDaily(S, id); net += d.net; adm += d.adm; gross += d.gross * d.div; tv += hdStakeVal(S, id); } }
+  const sec = {};
+  for (const s of HD_SECS){
+    const sh = hdShare(S, s.id), eb = hdEmbCount(S, s.id), X = s.id === 'exons';
+    let add = X ? (sh > 0 ? 1.2 : 0) + eb * 0.8 : (sh > 0.5 ? 1.2 + (sh - 0.5) * 6 : 0) + eb * 1.5;
+    if (add > 0 && hdActiveFines(S).some(f => f.sec === s.id)) add *= X ? 1.25 : 1.5;
+    const risk = S.hold.risk[s.id] || 0;
+    let rv = 0, n = 0; for (let i = 0; i < S.rivals.length; i++) if (hdRvAlive(S, i)){ rv += hdPass(S, s.id, i); n++; }
+    sec[s.id] = { sh, add, risk, days: add > 0 ? Math.max(0, Math.ceil((100 - risk) / add)) : null, me: s.id === 'elec' || s.id === 'exons' ? hdPass(S, s.id, -1) : hdPass(S, s.id, -1), rv: n ? rv / n : 1 };
+  }
+  return { net, adm, gross, tv, n: hdNStakes(S), sec };
+}
+
+/* ---------- Toplu alım planı ---------- */
+// Rakip payına ~%60 kabul olasılığı veren fiyat
+function hbBidFor(S, id, rv, pct){
+  const fair = hdVal(S, id) * pct; let best = null;
+  for (let p = 1.0; p <= 2.6 + 1e-9; p += 0.05){ const price = Math.round(fair * p), pr = hdBidProb(S, id, rv, pct, price); best = { rv, pct, price, pr }; if (pr >= HB_BID_P) break; }
+  return best;
+}
+// mode: 'target' (val = hedef pay 0–1) · 'budget' (val = bütçe $) · bids: rakip paylarına teklif hazırla
+function hbPlan(S, ids, mode, val, bids){
+  hbEnsure(S);
+  const H = S.hold, rows = [], heat = { ...S.hb.heat };
+  const priceAt = (id, d) => { const sec = HD_BY[id].sec, p = _hbBuyPrice(S, id, d, -1) * (1 + (heat[sec] || 0)); return Math.round(p); };
+  const bump = (id, d) => { const sec = HD_BY[id].sec; heat[sec] = Math.min(HB_HEAT_MAX, (heat[sec] || 0) + HB_HEAT_STEP * Math.min(1, d / 0.1 + 0.3)); };
+  let cost = 0, esc = 0;
+  if (mode === 'budget'){
+    // kontrol başına en çok etki: sektör çarpanı × şirket ağırlığı / kontrol maliyeti
+    const cand = ids.map(id => { const c = H.cos[id]; if (hdCtl(S, id) === -1) return null; const need = 0.51 - c.own, fl = hdFloat(S, id); if (need <= 0 || fl + 1e-9 < need) return null;
+      const co = HD_BY[id], score = HD_SEC[co.sec].mult * Math.max(0.05, co.w); const p = priceAt(id, need); return { id, need, p, eff: score / p }; }).filter(Boolean).sort((a, b) => b.eff - a.eff);
+    for (const x of cand){ const p = priceAt(x.id, x.need); if (cost + p > val) continue; cost += p; bump(x.id, x.need); rows.push({ id: x.id, buy: +x.need.toFixed(3), cost: p, to: H.cos[x.id].own + x.need }); }
+  } else {
+    const t = clamp(val, 0.01, 1);
+    for (const id of ids){
+      const c = H.cos[id]; let need = Math.round((t - c.own) * 1000) / 1000; if (need < 0.01) continue;
+      const fl = Math.floor(hdFloat(S, id) * 1000) / 1000, buy = Math.min(need, fl), row = { id, buy: 0, cost: 0, to: c.own };
+      if (buy >= 0.01){ row.buy = buy; row.cost = priceAt(id, buy); bump(id, buy); cost += row.cost; row.to += buy; need = +(need - buy).toFixed(3); }
+      if (need >= 0.01 && bids){
+        const hs = Object.keys(c.h).map(Number).filter(i => hdRvAlive(S, i) && c.h[i] > 0).sort((a, b) => c.h[b] - c.h[a]);
+        row.bids = [];
+        for (const i of hs){ if (need < 0.01) break; if (S.hold.bids.some(b => b.id === id && b.rv === i)) continue; const pct = Math.min(need, c.h[i]); if (pct < 0.01) continue;
+          const b = hbBidFor(S, id, i, +pct.toFixed(3)); row.bids.push(b); esc += b.price; need = +(need - pct).toFixed(3); }
+      }
+      if (need >= 0.01) row.short = need;
+      if (row.buy || (row.bids && row.bids.length) || row.short) rows.push(row);
+    }
+  }
+  // etki önizlemesi
+  const before = hbSnapshot(S);
+  const mut = {}; for (const r of rows) mut[r.id] = { own: Math.min(1, r.to) };
+  const after = hbWith(S, mut, () => hbSnapshot(S));
+  return { mode, val, rows, cost, esc, cashAfter: S.cash - cost - esc, before, after, heat };
+}
+function hbBuy(S, ids, mode, val, bids){
+  const pl = hbPlan(S, ids, mode, val, bids); let n = 0, spent = 0, nb = 0, fail = [];
+  for (const r of pl.rows){
+    if (r.buy >= 0.01){ const cash0 = S.cash, res = actHoldBuy(S, r.id, r.buy); if (res && res.ok !== false){ n++; spent += cash0 - S.cash; } else fail.push(HD_BY[r.id].name + ': ' + (res && res.msg)); }
+    for (const b of r.bids || []){ const res = actHoldBid(S, r.id, b.rv, b.pct, b.price); if (res && res.ok !== false) nb++; else fail.push(HD_BY[r.id].name + ': ' + (res && res.msg)); }
+  }
+  if (!n && !nb) return R_NO(fail[0] || 'Alınacak pay yok.');
+  const H = S.hb; H.st.bought += n; H.st.spent += spent; H.st.bids += nb;
+  const secs = [...new Set(pl.rows.filter(r => r.buy).map(r => HD_BY[r.id].sec))];
+  const t = `Toplu alım: ${n} şirkette pay alındı (${fmtMoney(spent)})${nb ? `, ${nb} rakibe teklif verildi` : ''}.`;
+  log(S, t, 'good'); hdEv(S, t); hbOp(S, t);
+  if (n >= 3) hbReact(S, secs, n);
+  return R_OK(t + (fail.length ? ` ${fail.length} işlem yapılamadı.` : ''));
+}
+// Toplu alımın yankısı: rakipler sektörde serbest payı kapar, gündem oluşur
+function hbReact(S, secs, n){
+  const H = S.hold;
+  for (const sec of secs){
+    const live = S.rivals.map((r, i) => i).filter(i => hdRvAlive(S, i)).sort((a, b) => ((HD_AFF[(RIVAL_AI[b] || {}).pers] || {})[sec] || 0) - ((HD_AFF[(RIVAL_AI[a] || {}).pers] || {})[sec] || 0)).slice(0, 2);
+    for (const i of live){
+      if (rnd(S) > 0.5) continue;
+      const pool = HD_LIST[sec].filter(c => hdCtl(S, c.id) !== -1 && hdFloat(S, c.id) >= 0.05); if (!pool.length) continue;
+      const c = pickArr(S, pool), st = H.cos[c.id], d = Math.min(hdFloat(S, c.id), Math.round(rr(S, 0.05, 0.12) * 100) / 100), price = hdBuyPrice(S, c.id, d, i), rv = S.rv[i];
+      if (d >= 0.01 && rv && price <= rv.c * 0.3){ rv.c -= price; st.h[i] = +((st.h[i] || 0) + d).toFixed(4); hdBump(S); const t = `${RIVALS[i].name} karşı hamle yaptı: ${c.name} şirketinde ${hdPctStr(d)} pay aldı.`; log(S, t, 'rival'); hdEv(S, t); hbOp(S, t); }
+    }
+  }
+  if (typeof smShift === 'function' && S.sm){
+    try {
+      smShift(S, { t: -Math.min(4, n * 0.5) }, `Tedarik zincirinde toplu satın alma (${n} şirket)`, ['med', 'eth', 'inv'], true);
+      smAgPush(S, { id: 'hb:' + Math.floor(S.day / 15), tag: smTag(S.brand + ' Tedarik Zinciri'), n: 'Tedarik zinciri alımları', t: 't', pol: -1, heat: 18 + n * 4 });
+      if (n >= 5) addPost(S, { a: newsAuthor(S), title: `${S.brand} Labs tedarik zincirinde ${n} şirkete birden ortak oldu`, text: `Analistler hamlenin GPU, bellek ve enerji fiyatlarını etkileyebileceğini söylüyor. Rekabet Kurumu'nun dosyayı inceleyip incelemeyeceği merak konusu.`, topic: 'general', ctx: { b: S.brand }, tag: smTag(S.brand + ' Tedarik Zinciri'), nComments: 3 });
+    } catch (e) {}
+  }
+}
+function hbSell(S, ids, target){
+  let n = 0, gain = 0;
+  for (const id of ids){ const c = S.hold.cos[id]; const d = +(c.own - target).toFixed(3); if (d < 0.01) continue; const g0 = S.cash, r = actHoldSell(S, id, target <= 0 ? 1 : d); if (r && r.ok !== false){ n++; gain += S.cash - g0; } }
+  if (!n) return R_NO('Satılacak pay yok.');
+  const t = `Toplu satış: ${n} şirket, +${fmtMoney(gain)}.`; hbOp(S, t); hdEv(S, t); return R_OK(t);
+}
+function hbSellPreview(S, ids, target){ let g = 0, n = 0; for (const id of ids){ const c = S.hold.cos[id], d = c.own - target; if (d >= 0.01){ g += hdSellGain(S, id, target <= 0 ? c.own : d); n++; } } return { gain: g, n }; }
+
+/* ---------- Politika şablonları ---------- */
+function hbTplOf(S, k){ return HB_TPL[k] || (S.hb && S.hb.tpl[k]); }
+function hbTopRivals(S, n){ return S.rivals.map((r, i) => i).filter(i => hdRvAlive(S, i)).sort((a, b) => S.rivals[b].q - S.rivals[a].q).slice(0, n); }
+function hbTplMut(S, ids, T){
+  const mut = {};
+  for (const id of ids){
+    if (hdCtl(S, id) !== -1) continue; const c = S.hold.cos[id], sec = HD_BY[id].sec, m = {};
+    for (const k in T.m){ if (k === 'ql' && sec !== 'gpu') continue; const r = HD_KEYS[k]; m[k] = clamp(T.m[k], r[0], r[1]); }
+    let emb = null;
+    if (T.emb > 0 && sec !== 'exons'){ emb = { ...c.m.emb }; for (const i of hbTopRivals(S, T.emb)) if (!emb[i] && !((c.m.cool[i] || 0) > S.day) && Object.values(emb).filter(u => u > S.day).length < 3) emb[i] = S.day + HD_DAYS.emb; }
+    if (T.emb < 0) emb = {};
+    mut[id] = { m, ...(emb ? { emb } : {}) };
+  }
+  return mut;
+}
+function hbTplPreview(S, ids, k){
+  const T = hbTplOf(S, k); if (!T) return null;
+  const mut = hbTplMut(S, ids, T), n = Object.keys(mut).length;
+  return { n, before: hbSnapshot(S), after: n ? hbWith(S, mut, () => hbSnapshot(S)) : hbSnapshot(S) };
+}
+function hbApplyTpl(S, ids, k){
+  const T = hbTplOf(S, k); if (!T) return R_NO('Şablon yok.');
+  const mut = hbTplMut(S, ids, T); let n = 0, ne = 0;
+  for (const id in mut){
+    const x = mut[id]; for (const key in x.m) actHoldSet(S, id, key, x.m[key]);
+    const c = S.hold.cos[id];
+    if (x.emb){ const want = new Set(Object.keys(x.emb).filter(i => x.emb[i] > S.day).map(Number)), have = Object.keys(c.m.emb).filter(i => c.m.emb[i] > S.day).map(Number);
+      for (const i of have) if (!want.has(i)){ actHoldEmbargo(S, id, i); ne++; }
+      for (const i of want) if (!have.includes(i)){ const r = actHoldEmbargo(S, id, i); if (r && r.ok !== false) ne++; } }
+    c.m.tpl = k; n++;
+  }
+  if (!n) return R_NO('Seçilenler arasında kontrolün olan şirket yok (%51).');
+  const t = `"${T.n}" politikası ${n} şirkete uygulandı${ne ? ` (${ne} ambargo değişikliği)` : ''}.`; hbOp(S, t); hdEv(S, t); return R_OK(t);
+}
+function hbSaveTpl(S, id, name){
+  const c = S.hold.cos[id]; if (!c) return R_NO('Şirket yok.');
+  const H = hbEnsure(S), k = 'u' + (Object.keys(H.tpl).length + 1);
+  if (Object.keys(H.tpl).length >= 6) return R_NO('En fazla 6 özel şablon.');
+  H.tpl[k] = { n: String(name || 'Şablonum ' + (Object.keys(H.tpl).length + 1)).slice(0, 24), d: HD_BY[id].name + ' ayarlarından', m: { sp: c.m.sp, rp: c.m.rp, qt: c.m.qt, dv: c.m.dv, ql: c.m.ql } };
+  return R_OK(`Şablon kaydedildi: ${H.tpl[k].n}`);
+}
+
+/* ---------- Toplu ambargo ve yatırım ---------- */
+function hbEmbargo(S, ids, rv, on){
+  let n = 0, why = '';
+  for (const id of ids){ if (hdCtl(S, id) !== -1 || HD_BY[id].sec === 'exons') continue; const c = S.hold.cos[id], is = hdEmbOn(S, c, rv); if (is === on) continue; const r = actHoldEmbargo(S, id, rv); if (r && r.ok !== false) n++; else why = r && r.msg; }
+  if (!n) return R_NO(why || 'Uygun şirket yok.');
+  const t = `${RIVALS[rv].name}: ${n} şirkette ambargo ${on ? 'başlatıldı' : 'kaldırıldı'}.`; hbOp(S, t); return R_OK(t);
+}
+function hbInvest(S, ids, tier){
+  let n = 0, cost = 0, why = '';
+  for (const id of ids){ if (hdCtl(S, id) !== -1) continue; const c0 = S.cash, r = actHoldInvest(S, id, tier); if (r && r.ok !== false){ n++; cost += c0 - S.cash; } else why = r && r.msg; }
+  if (!n) return R_NO(why || 'Uygun şirket yok.');
+  const t = `Kapasite yatırımı: ${n} şirket, ${fmtMoney(cost)}.`; hbOp(S, t); return R_OK(t);
+}
+function hbInvestCost(S, ids, tier){ let c = 0, n = 0; for (const id of ids) if (hdCtl(S, id) === -1){ c += hdInvCost(S, id, tier); n++; } return { cost: c, n }; }
+
+/* ---------- Kâr içte tutma → kapasite (kâr aktarımı ayarına anlam kazandırır) ---------- */
+function hbRetainDaily(S){
+  for (const id in S.hold.cos){
+    if (hdCtl(S, id) !== -1) continue; const c = S.hold.cos[id], m = c.m; if (m.dv >= 0.999) continue;
+    const d = hdDaily(S, id); m.rf = (m.rf || 0) + d.gross * (1 - m.dv);
+    const need = hdInvCost(S, id, 0);
+    if (m.rf >= need && m.inv.filter(x => x.at > S.day).length < 3){ m.rf -= need; m.inv.push({ at: S.day + HD_INV[0].days, add: HD_INV[0].add * 0.75 }); hdBump(S); hdEv(S, `${HD_BY[id].name}: içte tutulan kârla kapasite yatırımı başladı`); }
+  }
+}
+
+/* ---------- Gelen teklif kuralları ---------- */
+function hbRulesDaily(S){
+  const R = S.hb.rule; if (!R.on) return;
+  const H = S.hold;
+  for (let k = H.offers.length - 1; k >= 0; k--){
+    const o = H.offers[k], fair = hdVal(S, o.id) * o.pct, x = o.price / Math.max(1, fair);
+    const keepCtl = hdCtl(S, o.id) === -1 && H.cos[o.id].own - o.pct < 0.51;
+    if (x >= R.acc && !keepCtl){ const r = actHoldOffer(S, k, true); if (r.ok !== false) hbOp(S, `Kural: ${RIVALS[o.rv].name} teklifi kabul edildi (${HD_BY[o.id].name}, değerin ${x.toFixed(2).replace('.', ',')} katı)`); }
+    else if (x <= R.rej || keepCtl){ actHoldOffer(S, k, false); hbOp(S, `Kural: ${RIVALS[o.rv].name} teklifi reddedildi (${HD_BY[o.id].name}${keepCtl ? ', kontrol korunuyor' : ''})`); }
+  }
+  for (let k = H.counters.length - 1; k >= 0; k--){
+    const b = H.counters[k], fair = hdVal(S, b.id) * b.pct, x = b.price / Math.max(1, fair);
+    if (x <= R.ctr){ const r = actHoldCounter(S, k, true); if (r.ok !== false) hbOp(S, `Kural: karşı teklif kabul edildi (${HD_BY[b.id].name})`); }
+    else { actHoldCounter(S, k, false); hbOp(S, `Kural: pahalı karşı teklif reddedildi (${HD_BY[b.id].name})`); }
+  }
+}
+
+/* ---------- Otomatik holding yöneticisi ---------- */
+function hbAutoFee(S){ return S.hold ? S.hold.tv * HB_AUTO_FEE : 0; }
+function hbAutoLog(S, t){ const A = S.hb.auto; A.log.unshift({ d: S.day, t }); if (A.log.length > 16) A.log.length = 16; S.hb.st.auto++; }
+function hbAutoDaily(S){
+  const A = S.hb.auto; if (!A.on || !S.hold.on) return;
+  const fee = hbAutoFee(S); if (fee > 0){ S.cash -= fee; if (typeof addExtra === 'function') addExtra(S, 'hbauto', 'Holding yöneticisi', -fee); }
+  if (S.day < A.next) return; A.next = S.day + 7;
+  const H = S.hold, spare = () => S.cash - A.cashMin;
+  // 1) kontrol savunması
+  if (A.defend) for (const id in H.cos){
+    if (hdCtl(S, id) !== -1) continue; const c = H.cos[id], t = hdTop(c);
+    if (t && t.s >= 0.25 && c.own < 0.6){ const d = Math.min(hdFloat(S, id), +(0.6 - c.own).toFixed(3)); if (d >= 0.01){ const p = hdBuyPrice(S, id, d, -1); if (p <= spare() * 0.25){ const r = actHoldBuy(S, id, d); if (r.ok !== false) hbAutoLog(S, `${HD_BY[id].name}: ${RIVALS[t.i].name} %${Math.round(t.s * 100)} topladı, kontrol savunuldu (+${hdPctStr(d)}, ${fmtMoney(p)})`); } } }
+  }
+  // 2) ceza riski
+  if (A.risk) for (const s of HD_SECS){
+    if ((H.risk[s.id] || 0) < 70) continue; let ch = 0;
+    for (const c of HD_LIST[s.id]){ if (hdCtl(S, c.id) !== -1) continue; const m = H.cos[c.id].m;
+      for (const k of Object.keys(m.emb)) if (m.emb[k] > S.day){ actHoldEmbargo(S, c.id, +k); ch++; }
+      if (m.rp > 1.1){ actHoldSet(S, c.id, 'rp', 1.1); ch++; } }
+    if (ch) hbAutoLog(S, `${s.short}: soruşturma riski %${Math.round(H.risk[s.id])}, ${ch} ayar yumuşatıldı`);
+  }
+  // 3) kâr aktarımı: nakit alt sınırın altına inerse içte tutulan kâr serbest bırakılır
+  if (A.payout && S.cash < A.cashMin + 1){
+    let ch = 0; for (const id in H.cos){ if (hdCtl(S, id) !== -1) continue; const m = H.cos[id].m; if (m.dv < 0.999){ actHoldSet(S, id, 'dv', 1); ch++; } }
+    if (ch) hbAutoLog(S, `Nakit alt sınırın altında: ${ch} şirkette kârın tamamı aktarılıyor`);
+  }
+  // 4) darboğaz: senin maliyetin yüksek sektörde kapasite
+  if (A.cap){
+    const worst = HD_SECS.filter(s => s.id !== 'elec' && s.id !== 'exons').map(s => ({ s, sup: hdSup(S, s.id) })).sort((a, b) => a.sup - b.sup)[0];
+    if (worst && worst.sup < 1.05){ const c = HD_LIST[worst.s.id].filter(c => hdCtl(S, c.id) === -1 && S.hold.cos[c.id].m.inv.filter(x => x.at > S.day).length < 2).sort((a, b) => b.w - a.w)[0];
+      if (c){ const cost = hdInvCost(S, c.id, 0); if (cost <= spare() * 0.2){ const r = actHoldInvest(S, c.id, 0); if (r.ok !== false) hbAutoLog(S, `${c.name}: ${worst.s.short} arzı dar, kapasite +%20 (${fmtMoney(cost)})`); } } }
+  }
+}
+
+/* ---------- Günlük döngü ---------- */
+const _hbTick = tick;
+tick = function(S){
+  const d0 = S.day; const r = _hbTick(S);
+  if (S.day !== d0 && S.hold){
+    hbEnsure(S);
+    try {
+      for (const k in S.hb.heat){ S.hb.heat[k] *= HB_HEAT_DECAY; if (S.hb.heat[k] < 0.002) delete S.hb.heat[k]; }
+      hbRetainDaily(S); hbRulesDaily(S); hbAutoDaily(S);
+    } catch (e) { if (typeof globalThis !== 'undefined' && globalThis.__hbDebug) throw e; S.hb.err = (e && e.message) || 'hata'; }
+  }
+  return r;
+};
+const _hbNewGame = newGame;
+newGame = function(a, b){ const S = _hbNewGame(a, b); if (S) S.hb = hbState(); return S; };
+if (typeof MIGRATIONS !== 'undefined') MIGRATIONS.push(st => { if (st && st.hold) hbEnsure(st); });
+if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { hbPlan, hbBuy, hbSell, hbApplyTpl, hbTplPreview, hbEmbargo, hbInvest, hbSnapshot });
 
 </script>
 <script>
@@ -22084,6 +22418,170 @@ if (typeof S !== 'undefined' && S){ try { const mg = MIGRATIONS[MIGRATIONS.lengt
       return h;
     };
   }
+})();
+
+;
+/* ============================================================
+   COMPUTE EMPIRE v13 — HOLDING 2 ARAYÜZÜ (Şirket → Holding, en üstte)
+   Portföy tablosu + seçim + toplu işlemler: Satın al · Sat · Politika · Ambargo · Yatırım · Otomasyon
+   ============================================================ */
+(function(){
+  if (typeof BIZ_VIEWS === 'undefined' || !BIZ_VIEWS.hold || typeof hbPlan !== 'function') return;
+  const U = { sel: new Set(), sec: 'all', st: 'all', mode: 'buy', tgt: 0.51, bmode: 'target', bud: '', bids: true, sell: 0, tpl: 'cheap', rv: null, tier: 0, open: true };
+  const e = s => esc(String(s));
+  const pc = x => hdPctStr(x);
+  const mny = x => money(x);
+  const sgn = (x, f) => (x >= 0 ? '+' : '−') + f(Math.abs(x));
+  const ST = [['all', 'Hepsi'], ['ctl', 'Kontrol sende'], ['own', 'Payın var'], ['rv', 'Rakip kontrolünde'], ['free', 'Serbest ≥%20']];
+  function list(){
+    return HD_COS.filter(c => (U.sec === 'all' || c.sec === U.sec)).filter(c => {
+      const st = S.hold.cos[c.id], ctl = hdCtl(S, c.id);
+      return U.st === 'all' || (U.st === 'ctl' && ctl === -1) || (U.st === 'own' && st.own >= 0.01) || (U.st === 'rv' && ctl != null && ctl >= 0) || (U.st === 'free' && hdFloat(S, c.id) >= 0.2);
+    });
+  }
+  const selIds = () => [...U.sel].filter(id => S.hold.cos[id]);
+  function secRow(){
+    const snap = hbSnapshot(S);
+    return `<div class="hbsecs">${HD_SECS.map(s => { const x = snap.sec[s.id], r = Math.min(100, Math.round(x.risk)), heat = hbHeat(S, s.id);
+      return `<button class="hbsec ${U.sec === s.id ? 'on' : ''}" data-a="hbsec" data-v="${s.id}"><b>${e(s.short)}</b><span>Payın ${pc(x.sh)}</span><span>Sana ${hdX(x.me)} · rakip ${hdX(x.rv)}</span>
+        <i class="hbrisk"><i style="width:${r}%;background:var(${r > 70 ? '--bad' : r > 40 ? '--warn' : '--cool'})"></i></i>${heat > 0.005 ? `<span class="t-warn">Fiyat +${Math.round(heat * 100)}%</span>` : ''}</button>`; }).join('')}</div>`;
+  }
+  function table(L){
+    const all = L.length && L.every(c => U.sel.has(c.id));
+    const rows = L.map(c => { const st = S.hold.cos[c.id], ctl = hdCtl(S, c.id), d = st.own >= 0.01 ? hdDaily(S, c.id).net : 0, tpl = st.m.tpl && hbTplOf(S, st.m.tpl);
+      return `<tr class="${U.sel.has(c.id) ? 'on' : ''}"><td><input type="checkbox" data-a="hbpick" data-v="${c.id}" ${U.sel.has(c.id) ? 'checked' : ''} aria-label="${e(c.name)} seç"></td>
+        <td class="nm"><b>${e(c.name)}</b><span class="dim">${e(HD_SEC[c.sec].short)}${tpl ? ' · ' + e(tpl.n) : ''}</span></td>
+        <td class="r">${st.own >= 0.01 ? pc(st.own) : '—'}<span class="dim">${hbLvlName(st.own)}</span></td>
+        <td>${ctl === -1 ? '<span class="pill good">Sen</span>' : ctl != null ? `<span class="pill bad">${e(RIVALS[ctl].name)}</span>` : '<span class="dim">Bağımsız</span>'}</td>
+        <td class="r">${pc(hdFloat(S, c.id))}</td><td class="r">${mny(hdVal(S, c.id))}</td><td class="r ${d >= 0 ? 'up' : 'dn'}">${st.own >= 0.01 ? sgn(d, mny) : ''}</td></tr>`; }).join('');
+    return `<div class="hbtbl"><table><thead><tr><th><input type="checkbox" data-a="hball" ${all ? 'checked' : ''} aria-label="Hepsini seç"></th><th>Şirket</th><th class="r">Pay</th><th>Kontrol</th><th class="r">Serbest</th><th class="r">Değer</th><th class="r">Günlük</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+  function delta(b, a){
+    const secs = HD_SECS.filter(s => Math.abs(a.sec[s.id].me - b.sec[s.id].me) > 0.004 || Math.abs(a.sec[s.id].rv - b.sec[s.id].rv) > 0.004 || Math.abs(a.sec[s.id].sh - b.sec[s.id].sh) > 0.001 || a.sec[s.id].add !== b.sec[s.id].add);
+    const risk = HD_SECS.map(s => ({ s, x: a.sec[s.id] })).filter(o => o.x.add > 0);
+    return `<dl class="kv hbkv"><dt>Günlük net (temettü − yönetim)</dt><dd class="${a.net >= b.net ? 'up' : 'dn'}">${sgn(b.net, mny)} → ${sgn(a.net, mny)}</dd>
+      <dt>Yönetim gideri</dt><dd>${mny(b.adm)} → ${mny(a.adm)} <span class="dim">(${a.n} iştirak, her biri +%15)</span></dd>
+      ${secs.map(s => `<dt>${e(s.short)}</dt><dd>payın ${pc(b.sec[s.id].sh)} → ${pc(a.sec[s.id].sh)} · sana ${hdX(b.sec[s.id].me)} → ${hdX(a.sec[s.id].me)} · rakip ${hdX(b.sec[s.id].rv)} → ${hdX(a.sec[s.id].rv)}</dd>`).join('')}
+      ${risk.length ? `<dt>Soruşturma riski</dt><dd class="dn">${risk.map(o => `${e(o.s.short)}: ${o.x.days === 0 ? 'ceza eşiğinde' : '~' + o.x.days + ' günde ceza'}`).join(' · ')}</dd>` : '<dt>Soruşturma riski</dt><dd class="up">yok</dd>'}</dl>`;
+  }
+  function buyPane(ids){
+    const tg = [[0.01, 'Temettü %1'], [0.10, 'Kurul %10'], [0.25, 'Veto %25'], [0.51, 'Kontrol %51'], [1, 'Tam %100']];
+    const head = `<div class="hdc"><button class="chip ${U.bmode === 'target' ? 'on' : ''}" data-a="hbbm" data-v="target">Hedef paya çık</button><button class="chip ${U.bmode === 'budget' ? 'on' : ''}" data-a="hbbm" data-v="budget">Bütçeyle en çok kontrol</button></div>
+      ${U.bmode === 'target' ? `<div class="hdc">${tg.map(([v, n]) => `<button class="chip ${Math.abs(U.tgt - v) < 1e-6 ? 'on' : ''}" data-a="hbtgt" data-v="${v}">${n}</button>`).join('')}</div>
+        <label class="small hbchk"><input type="checkbox" data-a="hbbids" ${U.bids ? 'checked' : ''}> Serbest pay yetmezse rakip paylarına teklif ver (~%60 kabul fiyatıyla, tutar bloke edilir)</label>`
+      : `<div class="row" style="gap:6px"><input id="hbBud" class="inp" data-hdq="hbbud" inputmode="numeric" placeholder="Bütçe, ör. 2000000" value="${e(U.bud)}" style="flex:1"><button class="btn sm" data-a="hbbud">Hesapla</button></div>
+        <div class="small dim">Motor, sektör etkisi başına en ucuz kontrol (%51) yollarını seçer. Seçim yapmazsan tüm liste değerlendirilir.</div>`}`;
+    const bud = +String(U.bud).replace(/[^\d]/g, '');
+    if (U.bmode === 'budget' && !(bud > 0)) return head;
+    const pl = hbPlan(S, U.bmode === 'budget' && !ids.length ? list().map(c => c.id) : ids, U.bmode, U.bmode === 'budget' ? bud : U.tgt, U.bids);
+    if (!pl.rows.length) return head + '<div class="small dim" style="margin-top:8px">Bu hedefle alınacak pay yok.</div>';
+    const rows = pl.rows.map(r => `<div class="hbrow"><span class="sp">${e(HD_BY[r.id].name)}</span>${r.buy ? `<span>+${pc(r.buy)} · ${mny(r.cost)}</span>` : ''}${(r.bids || []).map(b => `<span class="dim">teklif ${e(RIVALS[b.rv].name)} ${pc(b.pct)} · ${mny(b.price)} · %${Math.round(b.pr * 100)}</span>`).join('')}${r.short ? `<span class="t-warn">${pc(r.short)} eksik kalır</span>` : ''}</div>`).join('');
+    const can = pl.cashAfter >= 0;
+    return `${head}<div class="hbprev">${rows}${delta(pl.before, pl.after)}
+      <div class="row small" style="margin-top:6px"><span class="sp">Toplam: <b>${mny(pl.cost)}</b>${pl.esc ? ` + bloke ${mny(pl.esc)}` : ''} · sonra nakit <b class="${can ? '' : 't-bad'}">${sgn(pl.cashAfter, mny)}</b></span></div>
+      <div class="small dim">Aynı sektörde art arda alım kalan şirketleri pahalandırır (fiyat ısısı, günde %3 söner). Büyük toplu alım rakiplerden karşı hamle ve gündemde tepki doğurur.</div>
+      <button class="btn pri" data-a="hbgo" ${can ? '' : 'disabled'} style="width:100%;margin-top:8px">${can ? 'Toplu alımı onayla' : 'Nakit yetmiyor'}</button></div>`;
+  }
+  function sellPane(ids){
+    const tg = [[0, 'Tamamen çık'], [0.10, '%10\'a indir'], [0.25, '%25\'e indir'], [0.51, '%51\'e indir']];
+    const pv = hbSellPreview(S, ids, U.sell);
+    return `<div class="hdc">${tg.map(([v, n]) => `<button class="chip ${U.sell === v ? 'on' : ''}" data-a="hbsell" data-v="${v}">${n}</button>`).join('')}</div>
+      <div class="hbprev">${pv.n ? `<div class="row small"><span class="sp">${pv.n} şirket · tahmini gelir</span><b class="up">+${mny(pv.gain)}</b></div><button class="btn" data-a="hbsellgo" style="width:100%;margin-top:8px">Toplu satışı onayla</button>` : '<div class="small dim">Seçilenlerde bu seviyenin üstünde payın yok.</div>'}</div>`;
+  }
+  function tplPane(ids){
+    const T = { ...HB_TPL, ...(S.hb.tpl || {}) };
+    const pv = hbTplPreview(S, ids, U.tpl);
+    const first = ids.find(id => hdCtl(S, id) === -1);
+    return `<div class="hbtpls">${Object.keys(T).map(k => `<button class="choice ${U.tpl === k ? 'on' : ''}" data-a="hbtpl" data-v="${k}"><b>${e(T[k].n)}</b><span>${e(T[k].d)}</span></button>`).join('')}</div>
+      <div class="hbprev">${pv && pv.n ? `${delta(pv.before, pv.after)}<button class="btn pri" data-a="hbtplgo" style="width:100%;margin-top:8px">${pv.n} şirkete uygula</button>` : '<div class="small dim">Politika yalnız kontrol ettiğin (%51+) şirketlere uygulanır. Seçimde böyle şirket yok.</div>'}
+      ${first ? `<button class="btn sm" data-a="hbtplsave" data-v="${first}" style="margin-top:6px">${e(HD_BY[first].name)} ayarlarını şablon olarak kaydet</button>` : ''}</div>`;
+  }
+  function embPane(ids){
+    const rv = S.rivals.map((r, i) => i).filter(i => hdRvAlive(S, i)).sort((a, b) => S.rivals[b].q - S.rivals[a].q).slice(0, 10);
+    if (U.rv == null || !rv.includes(U.rv)) U.rv = rv[0];
+    const n = ids.filter(id => hdCtl(S, id) === -1 && HD_BY[id].sec !== 'exons').length;
+    return `<div class="hdc">${rv.map(i => `<button class="chip ${U.rv === i ? 'on' : ''}" data-a="hbrv" data-v="${i}">${e(RIVALS[i].name)}</button>`).join('')}</div>
+      <div class="hbprev"><div class="small">${n} şirkette uygulanabilir. Ambargo 90 gün sürer; kaldırınca 60 gün beklenir; şirket başına en fazla 3 rakip. Ambargo Rekabet Kurumu riskini hızla büyütür ve kamuoyunu düşürür.</div>
+      <div class="row" style="gap:6px;margin-top:8px"><button class="btn" data-a="hbemb" data-v="1" ${n ? '' : 'disabled'} style="flex:1">Ambargo başlat</button><button class="btn" data-a="hbemb" data-v="0" ${n ? '' : 'disabled'} style="flex:1">Ambargoyu kaldır</button></div></div>`;
+  }
+  function invPane(ids){
+    const pv = hbInvestCost(S, ids, U.tier);
+    return `<div class="hdc">${HD_INV.map((t, k) => `<button class="chip ${U.tier === k ? 'on' : ''}" data-a="hbtier" data-v="${k}">+%${Math.round(t.add * 100)} · ${t.days} gün</button>`).join('')}</div>
+      <div class="hbprev">${pv.n ? `<div class="row small"><span class="sp">${pv.n} şirket</span><b>${mny(pv.cost)}</b></div><button class="btn" data-a="hbinv" style="width:100%;margin-top:8px" ${S.cash >= pv.cost ? '' : 'disabled'}>Yatırımı başlat</button>` : '<div class="small dim">Yatırım için kontrol (%51) gerekir.</div>'}
+      <div class="small dim" style="margin-top:6px">Kâr aktarımı %100'ün altındaysa içte kalan kâr birikir ve kendiliğinden kapasite yatırımına döner.</div></div>`;
+  }
+  function autoPane(){
+    const A = S.hb.auto, R = S.hb.rule, fee = hbAutoFee(S);
+    const tg = (k, n, d) => `<label class="small hbchk"><input type="checkbox" data-a="hbauto" data-v="${k}" ${A[k] ? 'checked' : ''}> <b>${n}</b> <span class="dim">${d}</span></label>`;
+    const cm = [0, 1e5, 1e6, 1e7, 1e8];
+    return `<div class="hbprev"><div class="row"><b class="sp">Otomatik holding yöneticisi</b><button class="btn sm ${A.on ? 'pri' : ''}" data-a="hbauto" data-v="on">${A.on ? 'Açık' : 'Kapalı'}</button></div>
+      <div class="small dim">Haftada bir çalışır. Gideri: pay değerinin günlük %0,004'ü (şu an ${mny(fee)}/gün).</div>
+      ${tg('defend', 'Kontrolü savun', 'rakip %25 toplarsa payı %60\'a çıkarır')}${tg('risk', 'Cezadan kaçın', 'sektör riski %70\'i geçince ambargoları kaldırır, fiyatı yumuşatır')}
+      ${tg('payout', 'Nakit koruması', 'nakit alt sınırın altına inerse içte tutulan kârı serbest bırakır')}${tg('cap', 'Darboğaz yatırımı', 'arzı en dar sektörde kapasite açar')}
+      <div class="small" style="margin-top:6px">Harcamalarda korunacak nakit alt sınırı</div><div class="hdc">${cm.map(v => `<button class="chip ${A.cashMin === v ? 'on' : ''}" data-a="hbcash" data-v="${v}">${v ? mny(v) : 'Yok'}</button>`).join('')}</div>
+      ${A.log.length ? `<div class="hdsec">Yönetici günlüğü</div>${A.log.slice(0, 6).map(x => `<div class="small"><span class="dim">${ago(x.d)} ·</span> ${e(x.t)}</div>`).join('')}` : ''}</div>
+      <div class="hbprev"><div class="row"><b class="sp">Gelen teklif kuralları</b><button class="btn sm ${R.on ? 'pri' : ''}" data-a="hbrule" data-v="on">${R.on ? 'Açık' : 'Kapalı'}</button></div>
+      <div class="small" style="margin-top:6px">Rakip payını şu katın üstünde isterse sat (kontrolü kaybettirecekse asla)</div><div class="hdc">${[1.3, 1.5, 1.8, 2.2].map(v => `<button class="chip ${R.acc === v ? 'on' : ''}" data-a="hbrule" data-v="acc:${v}">${hdX(v)}</button>`).join('')}</div>
+      <div class="small">Şu katın altını reddet</div><div class="hdc">${[1, 1.1, 1.2, 1.3].map(v => `<button class="chip ${R.rej === v ? 'on' : ''}" data-a="hbrule" data-v="rej:${v}">${hdX(v)}</button>`).join('')}</div>
+      <div class="small">Karşı teklifi şu kata kadar kabul et</div><div class="hdc">${[1.1, 1.25, 1.4, 1.6].map(v => `<button class="chip ${R.ctr === v ? 'on' : ''}" data-a="hbrule" data-v="ctr:${v}">${hdX(v)}</button>`).join('')}</div></div>`;
+  }
+  function bulkCard(){
+    if (!S.hold) return '';
+    hbEnsure(S);
+    const L = list(), ids = selIds();
+    const MODES = [['buy', 'Satın al'], ['sell', 'Sat'], ['tpl', 'Politika'], ['emb', 'Ambargo'], ['inv', 'Yatırım'], ['auto', 'Otomasyon']];
+    const pane = { buy: buyPane, sell: sellPane, tpl: tplPane, emb: embPane, inv: invPane, auto: autoPane }[U.mode];
+    const needSel = U.mode !== 'auto' && !(U.mode === 'buy' && U.bmode === 'budget') && !ids.length;
+    const ops = S.hb.ops.slice(0, 4);
+    return `<div class="card hbcard"><div class="h"><h2>Portföy ve toplu işlemler</h2><button class="link" data-a="hbopen">${U.open ? 'Gizle' : 'Aç'}</button></div>
+      ${U.open ? `${secRow()}
+      <div class="hdc"><button class="chip ${U.sec === 'all' ? 'on' : ''}" data-a="hbsec" data-v="all">Tüm sektörler</button>${ST.map(([k, n]) => `<button class="chip ${U.st === k ? 'on' : ''}" data-a="hbst" data-v="${k}">${n}</button>`).join('')}</div>
+      ${table(L)}
+      <div class="hbbar"><span class="small"><b>${ids.length}</b> seçili</span><button class="link" data-a="hbclr" ${ids.length ? '' : 'disabled'}>Temizle</button></div>
+      <div class="seg wrap hbmodes">${MODES.map(([k, n]) => `<button data-a="hbmode" data-v="${k}" class="${U.mode === k ? 'on' : ''}">${n}</button>`).join('')}</div>
+      ${needSel ? '<div class="small dim" style="margin-top:8px">Önce tablodan şirket seç (başlıktaki kutu listedekilerin hepsini seçer).</div>' : pane(ids)}
+      ${ops.length ? `<div class="hdsec">Son işlemler</div>${ops.map(o => `<div class="small"><span class="dim">${ago(o.d)} ·</span> ${e(o.t)}</div>`).join('')}` : ''}` : ''}</div>`;
+  }
+  const _view = BIZ_VIEWS.hold;
+  BIZ_VIEWS.hold = function(){ let top = ''; try { top = bulkCard(); } catch (err) { console.error('hb ui', err); } return top + _view(); };
+
+  const num0 = v => +v;
+  const _hh = handleHub;
+  handleHub = function(a, el){
+    if (!a || a.slice(0, 2) !== 'hb') return _hh(a, el);
+    const v = el.dataset.v || '';
+    switch (a){
+      case 'hbopen': U.open = !U.open; break;
+      case 'hbsec': U.sec = U.sec === v && v !== 'all' ? 'all' : v; break;
+      case 'hbst': U.st = v; break;
+      case 'hbpick': if (U.sel.has(v)) U.sel.delete(v); else U.sel.add(v); break;
+      case 'hball': { const L = list(); const all = L.every(c => U.sel.has(c.id)); for (const c of L) all ? U.sel.delete(c.id) : U.sel.add(c.id); break; }
+      case 'hbclr': U.sel.clear(); break;
+      case 'hbmode': U.mode = v; break;
+      case 'hbbm': U.bmode = v; break;
+      case 'hbtgt': U.tgt = num0(v); break;
+      case 'hbbids': U.bids = !U.bids; break;
+      case 'hbbud': { const i = document.getElementById('hbBud'); U.bud = i ? i.value : U.bud; break; }
+      case 'hbgo': { const i = document.getElementById('hbBud'); if (i) U.bud = i.value; const bud = +String(U.bud).replace(/[^\d]/g, ''); const ids = U.bmode === 'budget' && !selIds().length ? list().map(c => c.id) : selIds();
+        result(hbBuy(S, ids, U.bmode, U.bmode === 'budget' ? bud : U.tgt, U.bids)); return true; }
+      case 'hbsell': U.sell = num0(v); break;
+      case 'hbsellgo': if (!arm('hbsell')){ refresh(); return true; } result(hbSell(S, selIds(), U.sell)); return true;
+      case 'hbtpl': U.tpl = v; break;
+      case 'hbtplgo': result(hbApplyTpl(S, selIds(), U.tpl)); return true;
+      case 'hbtplsave': result(hbSaveTpl(S, v)); return true;
+      case 'hbrv': U.rv = num0(v); break;
+      case 'hbemb': result(hbEmbargo(S, selIds(), U.rv, v === '1')); return true;
+      case 'hbtier': U.tier = num0(v); break;
+      case 'hbinv': result(hbInvest(S, selIds(), U.tier)); return true;
+      case 'hbauto': { const A = S.hb.auto; if (v === 'on'){ A.on = !A.on; A.next = S.day; } else A[v] = !A[v]; break; }
+      case 'hbcash': S.hb.auto.cashMin = num0(v); break;
+      case 'hbrule': { const R = S.hb.rule; if (v === 'on') R.on = !R.on; else { const [k, x] = v.split(':'); R[k] = +x; } break; }
+      default: return _hh(a, el);
+    }
+    refresh(); return true;
+  };
+  // Genel bakışta ve holding özetinde kısayol
+  if (typeof OVW_TOP !== 'undefined') OVW_TOP.push(() => S && S.hb && S.hb.auto.on && S.hb.auto.log[0] && S.hb.auto.log[0].d === S.day ? `<div class="card flat"><div class="row"><span class="small sp"><b>Holding yöneticisi:</b> ${esc(S.hb.auto.log[0].t)}</span><button class="btn sm" data-a="hdgo">Holding</button></div></div>` : '');
 })();
 
 </script>
