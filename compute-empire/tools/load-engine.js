@@ -3,7 +3,7 @@ const fs = require('fs'), vm = require('vm');
 module.exports = function load(htmlPath){
   const html = fs.readFileSync(htmlPath, 'utf8');
   const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]);
-  const engine = scripts.find(s => s.includes('OYUN MOTORU'));
+  const engine = scripts.find(s => s.includes('function newGame('));
   const mem = {};
   const ctx = { console, Math, Date, JSON, setTimeout, clearTimeout,
     localStorage: { getItem: k => mem[k] ?? null, setItem: (k, v) => { mem[k] = String(v); }, removeItem: k => { delete mem[k]; } },

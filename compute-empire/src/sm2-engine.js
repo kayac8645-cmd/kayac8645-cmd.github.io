@@ -265,13 +265,14 @@ function smNames(S){
   const first = new Map();
   for (const x of set){ if (!x || x.length < 3 || !/^[A-ZÇĞİÖŞÜ]/.test(x)) continue; const w = x.split(' '), k = smLow(w[0]); if (!first.has(k)) first.set(k, []); first.get(k).push(w); }
   for (const l of first.values()) l.sort((a, b) => b.length - a.length);
-  return (_smNames = { S, d: S.day, n: S.models.length, first });
+  const ch = new Set([...first.keys()].map(k => k[0]));
+  return (_smNames = { S, d: S.day, n: S.models.length, first, ch });
 }
 function smFixNames(S, t){
   const N = smNames(S); if (!N.first.size) return t;
   const parts = t.split(/(\s+)/);
   for (let i = 0; i < parts.length; i += 2){
-    const raw = parts[i]; if (!raw || !/^[a-zçğıöşü]/.test(raw)) continue;
+    const raw = parts[i]; if (!raw || !N.ch.has(raw[0] === 'ı' ? 'i' : raw[0]) || !/^[a-zçğıöşü]/.test(raw)) continue;
     const core = raw.replace(/[^0-9A-Za-zÇĞİÖŞÜçğıöşü.]+$/, '').replace(/\.$/, ''), L = N.first.get(smLow(core)); if (!L) continue;
     for (const w of L){
       let ok = true; for (let j = 1; j < w.length; j++){ const p = parts[i + 2 * j]; if (!p){ ok = false; break; } const p2 = p.replace(/[^0-9A-Za-zÇĞİÖŞÜçğıöşü.]+$/, '').replace(/\.$/, '').split("'")[0]; if (smLow(p2) !== smLow(w[j])){ ok = false; break; } }
@@ -441,7 +442,7 @@ function smRel(S, a, b){ const R = S.sm.rel, k = smRelKey(a, b); return R[k] || 
 function smRelAdd(S, a, b, dw){
   const R = S.sm.rel, k = smRelKey(a, b), r = R[k] || (R[k] = { w: smRelBase(a, b), n: 0 });
   r.n++; r.w = clamp(r.w + dw, -3, 3);
-  const keys = Object.keys(R); if (keys.length > 600) for (const x of keys.slice(0, 150)) delete R[x];
+  if ((S.sm._relN = (S.sm._relN || 0) + 1) % 50 === 0){ const keys = Object.keys(R); if (keys.length > 600) for (const x of keys.slice(0, 150)) delete R[x]; }
   return r;
 }
 function smPickReplier(S, p, c, wantFoe){
