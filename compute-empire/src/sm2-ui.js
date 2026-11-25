@@ -49,9 +49,25 @@
     return `<div class="card smcard"><div class="h"><h2>Neden değişti?</h2></div>${rows}
       <div class="small dim" style="margin-top:8px">Sosyal motor: ${num(st.gen)} yorum üretildi · ${num(st.dup)} tekrar ve ${num(st.real)} gerçek dışı iddia elendi · ${num(st.rep)} bağlamlı yanıt · ${num(st.thr)} tartışma turu · ${num(st.conc)} geri adım</div></div>`;
   }
+
+  function econCard(S){
+    const L = smEconLines(S);
+    return `<div class="card smcard"><div class="h"><h2>Kesimlerin ekonomiye etkisi</h2></div>
+      ${L.map(x => `<div class="row small smwhy"><span class="sp">${e(x.a)} <span class="dim">· ${e(x.b)}</span></span><span class="num ${x.x >= 1 ? 'up' : 'dn'}">${x.s}</span></div>`).join('')}
+      <div class="small dim" style="margin-top:6px">Ücretsiz katmanı genel kullanıcılar, standart katmanı ve API'yi geliştiriciler, premium katmanı ve sözleşme bedellerini kurumsal müşteriler, değerlemeyi yatırımcılar belirler.</div></div>`;
+  }
+  function cmCard(S){
+    const cm = smCM(S), cost = smCMCost(S);
+    const POL = { pos: ['Olumlu yorum', { thanks: 'Teşekkür', joke: 'Espri', skip: 'Geç' }], neg: ['Eleştiri', { sorry: 'Özür', tech: 'Teknik', skip: 'Geç' }], q: ['Soru', { tech: 'Teknik', thanks: 'Teşekkür', skip: 'Geç' }], troll: ['Trol', { skip: 'Geç', joke: 'Espri' }] };
+    return `<div class="card smcard"><div class="h"><h2>Topluluk yöneticisi</h2><span class="x">${cm.lv ? num(cm.n) + ' yanıt' : 'yok'}</span></div>
+      <div class="hdc">${SM_CM.map((t, i) => `<button class="chip ${cm.lv === i ? 'on' : ''}" data-a="smcm" data-v="${i}">${e(t.n)}${i ? ' · ' + t.per + '/gün' : ''}</button>`).join('')}</div>
+      ${cm.lv ? `<div class="small dim">Gideri ${money(cost)}/gün. Kendi gönderilerine ve en çok beğenilen yorumlara öncelik verir; senin günlük etkileşim hakkını harcamaz.</div>
+      ${Object.keys(POL).map(k => `<div class="small" style="margin-top:6px">${POL[k][0]}</div><div class="hdc">${Object.keys(POL[k][1]).map(v => `<button class="chip ${cm.pol[k] === v ? 'on' : ''}" data-a="smcmpol" data-v="${k}:${v}">${POL[k][1][v]}</button>`).join('')}</div>`).join('')}
+      ${cm.log.length ? `<div class="small dim" style="margin-top:6px">${cm.log.slice(0, 3).map(x => `${typeof ago === 'function' ? ago(x.d) : x.d}: ${e(x.t)}`).join(' · ')}</div>` : ''}` : '<div class="small dim">Yorumlara senin politikanla otomatik yanıt veren çalışan. Kriz döneminde özür, sorulara teknik cevap gibi kurallar koyabilirsin.</div>'}</div>`;
+  }
   function smCards(){
     if (!S || !S.social) return '';
-    try { smEnsure(S); return `<div class="grid g2 smgrid">${mapCard(S)}${agCard(S)}</div>${whyCard(S)}`; } catch (err) { console.error('sm2 ui', err); return ''; }
+    try { smEnsure(S); return `<div class="grid g2 smgrid">${mapCard(S)}${agCard(S)}</div><div class="grid g2 smgrid">${econCard(S)}${cmCard(S)}</div>${whyCard(S)}`; } catch (err) { console.error('sm2 ui', err); return ''; }
   }
   const _op = opinionSub;
   opinionSub = function(){ return smCards() + _op(); };
@@ -80,6 +96,14 @@
         else at = j;
       }
       return h;
+    };
+  }
+  if (typeof handleHub === 'function'){
+    const _hh = handleHub;
+    handleHub = function(a, el){
+      if (a === 'smcm'){ result(actSmCM(S, +el.dataset.v)); return true; }
+      if (a === 'smcmpol'){ const [k, v] = (el.dataset.v || '').split(':'); result(actSmCMPol(S, k, v)); return true; }
+      return _hh(a, el);
     };
   }
 })();

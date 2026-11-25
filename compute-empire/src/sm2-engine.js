@@ -527,7 +527,7 @@ function smCounter(S, p, c){
     const f = smPickFact(S, F, pickArr(S, Object.keys(pc.pol > 0 ? F.pos : F.neg).concat(t ? [t] : [])), pc.pol);
     if (!f) return null; txt = pickArr(S, SM_W.dbl) + f.txt + '.'; act = 'dbl';
   } else {
-    txt = TR.fill(pickArr(S, SM_W.cede), { t: SM_TL[t] || 'bu' }); act = 'cede';
+    txt = SM_TL[t] ? TR.fill(pickArr(S, SM_W.cede), { t: SM_TL[t] }) : pickArr(S, ['Tamam, haklısın.', 'Peki, ikna oldum.', 'Kabul, bir daha baktım, haklısın.', 'Tamam, o rakamı atlamışım.']); act = 'cede';
     if (typeof c10Per === 'function'){ const ps = c10Per(S, d); ps.st = clamp(ps.st + (last.tone === 'pos' ? 0.12 : last.tone === 'neg' ? -0.12 : 0), -1, 1); }
     S.sm.st.conc++;
   }
@@ -685,6 +685,99 @@ function smThreadsDaily(S){
   }
 }
 
+
+/* ============================================================
+   SM2 · TEK SÖZ: tüm yanıtlar, kesimlerin ekonomiye etkisi, topluluk yöneticisi
+   ============================================================ */
+// --- Yanıt normalleştirici: eski katmanlardan gelen kısa, kalıp yanıtlar SM2 tarafından yeniden yazılır ---
+const SM_THANKS = {
+  truth: ['Rakamla cevap verilince insan güveniyor.', 'Net ve dürüst bir cevap, teşekkürler.', 'Böyle açık iletişim her şirkette yok.', 'Sorunun cevabını gerçekten verdiniz, saygı.', 'Bu cevapla ikna oldum.', 'Kaçamak yok, takdir ettim.'],
+  thanks: ['Cevap verdiğiniz için teşekkürler!', 'Kurumsal hesabın yorumlara dönmesi güzel.', 'Hızlı dönüş, sağ olun.', 'Bir marka hesabının gerçekten cevap verdiğini görmek güzel.', 'Muhatap bulmak iyi hissettirdi.', 'Okunduğumu bilmek yeter.', 'Bu ilgiye devam edin.'],
+  sorry: ['Özür kabul, ama düzelmesini bekliyorum.', 'Özür güzel, telafiyi görelim.', 'Sorumluluk almanız önemli, takipteyim.', 'Lafla değil, düzelterek gösterin.', 'Peki, bir şans daha veriyorum.'],
+  tech: ['Teknik açıklama için sağ olun, net oldu.', 'Bu ayrıntıyı bilmiyordum, teşekkürler.', 'Dokümantasyona da eklerseniz süper olur.', 'Mühendis ekibe selam olsun, açıklayıcıydı.'],
+  joke: ['Admin bugün formda 😄', 'Kurumsal hesap espri yapıyor, yıl olmuş 2027.', 'Bu cevaba güldüm, puan sizden.', 'Sosyal medya ekibine zam.'],
+};
+function smIsGeneric(t){ const x = String(t || '').replace(/@\S+/g, '').trim(); return x.split(/\s+/).filter(Boolean).length <= 6 && !/\d/.test(x); }
+function smNormalizeReplies(S){
+  const posts = S.social.posts; let n = 0;
+  for (let pi = 0; pi < posts.length && pi < 14; pi++){
+    const p = posts[pi]; if (S.day - p.day > 6) break;
+    for (const c of p.comments){
+      if (!c.r || !c.r.length) continue;
+      for (let k = 0; k < c.r.length; k++){
+        const r = c.r[k];
+        if (r.me || r.d < S.day - 1 || r.smN || !smIsGeneric(r.t)) continue;
+        const prev = c.r[k - 1], meH = '@' + meAuthor(S).h, toMe = (prev && prev.me) || r.t.indexOf(meH) === 0;
+        if (r.sm && !toMe) continue;
+        r.smN = 1;
+        const head = (r.t.match(/^(@\S+\s+)+/) || [''])[0];
+        if (toMe){
+          // oyuncunun yanıtına topluluk tepkisi: tonla eşleşen, tekrar etmeyen
+          const pool = SM_THANKS[c.c10q && c.c10q.a === 'truth' ? 'truth' : (prev.tone2 || (r.tone === 'neg' ? 'sorry' : 'thanks'))] || SM_THANKS.thanks;
+          let t = null; for (let j = 0; j < 6 && !t; j++){ const cand = pickArr(S, pool); if (!smSimilar(S, head + cand, 0.7)) t = cand; }
+          if (r.tone === 'neg') t = null;
+          if (t){ r.t = smPolish(S, head + t, false); smRemember(S, r.t); n++; }
+          continue;
+        }
+        // kalıp yanıt: üst yorumun iddiasına SM2 yanıtı
+        if (smSimilar(S, r.t, 0.55) || rnd(S) < 0.8){
+          const x = smReplyTo(S, p, c, r.tone === 'neg' ? 'rebut' : r.tone === 'pos' ? 'agree' : null);
+          if (x && !smSimilar(S, x.t, 0.6)){ c.r[k] = x; smRemember(S, x.t); n++; }
+        }
+      }
+    }
+  }
+  S.sm.st.norm = (S.sm.st.norm || 0) + n;
+}
+
+// --- Kesimler ekonomiye bağlanır ---
+// Katman: 0 ücretsiz ↔ genel kullanıcı · 1 standart (abonelik + API) ↔ geliştirici · 2 premium ↔ kurumsal. Etki ±%10.
+const SM_TIER_SEG = ['usr', 'dev', 'ent'];
+function smSegMult(S, sid, k){ if (!S || !S.sm) return 1; return 1 + clamp(smSegScore(S, sid), -60, 60) / 60 * k; }
+const _smModelPull = modelPull;
+modelPull = function(S, m, s){ const v = _smModelPull(S, m, s); return S && S.sm && SM_TIER_SEG[s] ? v * smSegMult(S, SM_TIER_SEG[s], 0.1) : v; };
+// Kurumsal kesim sözleşme bedellerini ±%20 değiştirir
+const _smGenOffer = genOffer;
+genOffer = function(S){ const c = _smGenOffer(S); if (c && S.sm){ const f = smSegMult(S, 'ent', 0.2); if (c.pay) c.pay = Math.round(c.pay * f); if (c.payDay) c.payDay = Math.round(c.payDay * f * 100) / 100; c.smF = +f.toFixed(3); } return c; };
+// Yatırımcı kesimi değerlemeyi ±%15 değiştirir
+const _smValuation = valuation;
+valuation = function(S){ const v = _smValuation(S); return S && S.sm ? v * smSegMult(S, 'inv', 0.15) : v; };
+function smEconLines(S){
+  if (!S.sm) return [];
+  const pc = x => { const r = Math.round((x - 1) * 100); return (r >= 0 ? '+' : '−') + '%' + Math.abs(r); };
+  return [['Ücretsiz katman çekimi', 'Genel kullanıcı', smSegMult(S, 'usr', 0.1)], ['Standart / API çekimi', 'Geliştiriciler', smSegMult(S, 'dev', 0.1)], ['Premium çekimi', 'Kurumsal', smSegMult(S, 'ent', 0.1)],
+    ['Sözleşme bedelleri', 'Kurumsal', smSegMult(S, 'ent', 0.2)], ['Değerleme', 'Yatırımcılar', smSegMult(S, 'inv', 0.15)]].map(([a, b, x]) => ({ a, b, x, s: pc(x) }));
+}
+
+// --- Topluluk yöneticisi ---
+const SM_CM = [{ n: 'Yok', cost: 0, per: 0 }, { n: 'Yarı zamanlı', cost: 350, per: 2 }, { n: 'Tam zamanlı', cost: 1400, per: 4 }, { n: 'Ekip', cost: 4800, per: 7 }];
+const SM_CM_POL = { pos: ['thanks', 'joke', 'skip'], neg: ['sorry', 'tech', 'skip'], q: ['tech', 'thanks', 'skip'], troll: ['skip', 'joke'] };
+function smCM(S){ const M = S.sm; if (!M.cm) M.cm = { lv: 0, pol: { pos: 'thanks', neg: 'sorry', q: 'tech', troll: 'skip' }, log: [], n: 0 }; return M.cm; }
+function smCMCost(S){ const cm = smCM(S); return SM_CM[cm.lv].cost * Math.max(1, Math.pow(1 + S.day / 400, 1.2)); }
+function actSmCM(S, lv){ lv = clamp(lv | 0, 0, SM_CM.length - 1); smCM(S).lv = lv; return R_OK(lv ? `Topluluk yöneticisi: ${SM_CM[lv].n}` : 'Topluluk yöneticisi bırakıldı.'); }
+function actSmCMPol(S, k, v){ const cm = smCM(S); if (!SM_CM_POL[k] || !SM_CM_POL[k].includes(v)) return R_NO('Geçersiz.'); cm.pol[k] = v; return R_OK('Politika kaydedildi.'); }
+function smCMDaily(S){
+  const cm = smCM(S); if (!cm.lv) return;
+  const cost = smCMCost(S); S.cash -= cost; if (typeof addExtra === 'function') addExtra(S, 'smcm', 'Topluluk yöneticisi', -cost);
+  if (typeof actReplyAny !== 'function' || typeof engLeft !== 'function') return;
+  // kendi gönderilerine ve en çok beğenilen yorumlara öncelik
+  const cand = [];
+  for (const p of S.social.posts){ if (S.day - p.day > 3) continue; for (const c of p.comments){ if (c.me || c.rp || c.hid) continue; cand.push({ p, c, w: (p.mine ? 3 : 1) * (1 + c.l / 20) * (c.c10q ? 0.2 : 1) }); } }
+  cand.sort((a, b) => b.w - a.w);
+  let done = 0;
+  for (const { p, c } of cand){
+    if (done >= SM_CM[cm.lv].per) break;
+    const kind = c.a && C10_BY_H[c.a.h] && C10_BY_H[c.a.h].lv === 'troll' ? 'troll' : c.tone === 'neg' ? 'neg' : c.tone === 'q' ? 'q' : 'pos';
+    const tone = cm.pol[kind]; if (!tone || tone === 'skip') continue;
+    // yönetici kendi hakkıyla çalışır: oyuncunun günlük etkileşim hakkı harcanmaz
+    engLeft(S); const left0 = S.eng.left; S.eng.left = Math.max(1, left0);
+    let r; try { r = actReplyAny(S, p.id, c.id, tone, ''); } finally { S.eng.left = left0; S.eng.n = Math.max(0, S.eng.n - 1); }
+    if (r && r.ok !== false){ done++; cm.n++; const last = c.r.find(x => x.me); if (last) last.cm = 1; }
+  }
+  if (done){ cm.log.unshift({ d: S.day, t: `${done} yoruma yanıt verildi` }); if (cm.log.length > 8) cm.log.length = 8; }
+}
+smOn('day', S => { try { smNormalizeReplies(S); } catch (e) { smErr(S, 'norm', e); } try { smCMDaily(S); } catch (e) { smErr(S, 'cm', e); } });
+
 /* ---------- 15) Mevcut hatta bağlanma (tek kanca noktası) ---------- */
 const _smGenComment = genComment;
 genComment = function(S, p){
@@ -773,4 +866,4 @@ tick = function(S){
 const _smNewGame = newGame;
 newGame = function(a, b){ const S = _smNewGame(a, b); if (S) S.sm = smState(); return S; };
 if (typeof MIGRATIONS !== 'undefined') MIGRATIONS.push(st => { if (st && st.social) smEnsure(st); });
-if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { smEnsure, smEmit, smShift, smOverall, smSegScore, smTopicScore, smFacts, smClaim, smReplyTo, TR });
+if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { actSmCM, actSmCMPol, smCM, smEconLines, smSegMult, smEnsure, smEmit, smShift, smOverall, smSegScore, smTopicScore, smFacts, smClaim, smReplyTo, TR });
