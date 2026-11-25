@@ -102,6 +102,35 @@
       <div class="small">Şu katın altını reddet</div><div class="hdc">${[1, 1.1, 1.2, 1.3].map(v => `<button class="chip ${R.rej === v ? 'on' : ''}" data-a="hbrule" data-v="rej:${v}">${hdX(v)}</button>`).join('')}</div>
       <div class="small">Karşı teklifi şu kata kadar kabul et</div><div class="hdc">${[1.1, 1.25, 1.4, 1.6].map(v => `<button class="chip ${R.ctr === v ? 'on' : ''}" data-a="hbrule" data-v="ctr:${v}">${hdX(v)}</button>`).join('')}</div></div>`;
   }
+
+  // ---------- Tedarik zinciri haritası ----------
+  function chainMap(){
+    const H = S.hold, ex = H.ex || {}, W = 340, Hh = 330;
+    const pos = { exons: [170, 34], mine: [80, 104], elec: [262, 104], hbm: [80, 174], gpu: [80, 244], sto: [196, 244], me: [262, 300] };
+    const info = sec => { let me = 0, rv = 0, eb = 0; for (const c of HD_LIST[sec]){ const ctl = hdCtl(S, c.id); if (ctl === -1){ me += c.w; for (const k in H.cos[c.id].m.emb) if (H.cos[c.id].m.emb[k] > S.day) eb++; } else if (ctl != null) rv += c.w; }
+      const tot = HD_LIST[sec].reduce((a, c) => a + c.w, 0) || 1; return { me: me / tot, rv: rv / tot, eb, cost: hdPass(S, sec, -1), risk: H.risk[sec] || 0 }; };
+    const node = (sec, label) => { const [x, y] = pos[sec], I = info(sec), w = 112, h = 44, x0 = x - w / 2, y0 = y - h / 2;
+      const meW = Math.round(I.me * (w - 12)), rvW = Math.round(I.rv * (w - 12));
+      return `<g class="hbn ${U.sec === sec ? 'on' : ''}" data-a="hbsec" data-v="${sec}" role="button" tabindex="0" aria-label="${e(label)}: payın ${Math.round(I.me * 100)}%, maliyet çarpanın ${hdX(I.cost)}">
+        <rect x="${x0}" y="${y0}" width="${w}" height="${h}" rx="9" class="bx"/>
+        <text x="${x0 + 8}" y="${y0 + 15}" class="t">${e(label)}${I.eb ? ' ⛔' + I.eb : ''}</text>
+        <text x="${x0 + w - 8}" y="${y0 + 15}" class="c ${I.cost < 0.995 ? 'g' : I.cost > 1.005 ? 'b' : ''}" text-anchor="end">${hdX(I.cost)}</text>
+        <rect x="${x0 + 6}" y="${y0 + 27}" width="${w - 12}" height="7" rx="3" class="tr"/>
+        <rect x="${x0 + 6}" y="${y0 + 27}" width="${meW}" height="7" rx="3" class="me"/>
+        <rect x="${x0 + 6 + (w - 12) - rvW}" y="${y0 + 27}" width="${rvW}" height="7" rx="3" class="rv"/>
+        ${I.risk > 40 ? `<circle cx="${x0 + w - 4}" cy="${y0 + 4}" r="5" class="rk"/>` : ''}</g>`; };
+    const edge = (a, b, lag) => { const [x1, y1] = pos[a], [x2, y2] = pos[b]; const sy = y1 + (y2 > y1 ? 22 : 0), ey = y2 - (y2 > y1 ? 22 : 0);
+      const mx = (x1 + x2) / 2, my = (sy + ey) / 2;
+      return `<path d="M${x1} ${sy} C ${x1} ${my}, ${x2} ${my}, ${x2} ${ey}" class="ed ${lag ? 'lag' : ''}" marker-end="url(#hbar)"/>`; };
+    const eff = ex.eff != null ? ex.eff : 1;
+    return `<div class="hbmap"><svg viewBox="0 0 ${W} ${Hh}" role="img" aria-label="Tedarik zinciri haritası">
+      <defs><marker id="hbar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8z" class="ah"/></marker></defs>
+      ${edge('exons', 'mine', 1)}${edge('exons', 'elec', 1)}${edge('mine', 'hbm')}${edge('hbm', 'gpu')}${edge('hbm', 'sto')}${edge('mine', 'sto')}${edge('gpu', 'me')}${edge('sto', 'me')}${edge('elec', 'me')}
+      ${node('exons', 'EXONS · çıktı ' + Math.round(eff * 100) + '%')}${node('mine', 'Maden')}${node('elec', 'Elektrik')}${node('hbm', 'HBM bellek')}${node('gpu', 'GPU')}${node('sto', 'RAM/Dep.')}
+      <g><rect x="${pos.me[0] - 56}" y="${pos.me[1] - 18}" width="112" height="36" rx="9" class="bx you"/><text x="${pos.me[0]}" y="${pos.me[1] + 5}" class="t" text-anchor="middle">Senin tesislerin</text></g>
+    </svg>
+    <div class="hblg small dim"><span><i class="me"></i>Senin kontrolün</span><span><i class="rv"></i>Rakip kontrolü</span><span>×: sana maliyet çarpanı</span><span>⛔ ambargo · <i class="rk"></i> ceza riski</span><span>Kesikli ok: EXONS etkisi 30–90 gün gecikmeli</span></div></div>`;
+  }
   function bulkCard(){
     if (!S.hold) return '';
     hbEnsure(S);
@@ -111,7 +140,7 @@
     const needSel = U.mode !== 'auto' && !(U.mode === 'buy' && U.bmode === 'budget') && !ids.length;
     const ops = S.hb.ops.slice(0, 4);
     return `<div class="card hbcard"><div class="h"><h2>Portföy ve toplu işlemler</h2><button class="link" data-a="hbopen">${U.open ? 'Gizle' : 'Aç'}</button></div>
-      ${U.open ? `${secRow()}
+      ${U.open ? `${chainMap()}${secRow()}
       <div class="hdc"><button class="chip ${U.sec === 'all' ? 'on' : ''}" data-a="hbsec" data-v="all">Tüm sektörler</button>${ST.map(([k, n]) => `<button class="chip ${U.st === k ? 'on' : ''}" data-a="hbst" data-v="${k}">${n}</button>`).join('')}</div>
       ${table(L)}
       <div class="hbbar"><span class="small"><b>${ids.length}</b> seçili</span><button class="link" data-a="hbclr" ${ids.length ? '' : 'disabled'}>Temizle</button></div>

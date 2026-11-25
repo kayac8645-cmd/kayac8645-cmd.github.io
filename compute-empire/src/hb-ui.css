@@ -30,3 +30,20 @@
 .hbtpls{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;margin-top:8px}
 .hbtpls .choice.on{border-color:var(--heat, var(--warn));box-shadow:0 0 0 1px var(--heat, var(--warn)) inset}
 @media (max-width:520px){.hbtbl th:nth-child(5),.hbtbl td:nth-child(5){display:none}.hbsecs{grid-template-columns:repeat(2,1fr)}}
+
+.hbmap{margin:6px 0 4px}
+.hbmap svg{width:100%;max-width:520px;height:auto;display:block;margin:0 auto}
+.hbmap .bx{fill:var(--panel2);stroke:var(--line2);stroke-width:1}
+.hbmap .bx.you{fill:color-mix(in srgb, var(--warn) 14%, var(--panel2));stroke:var(--warn)}
+.hbmap .hbn{cursor:pointer}
+.hbmap .hbn.on .bx,.hbmap .hbn:focus .bx{stroke:var(--warn);stroke-width:2}
+.hbmap .t{font:600 10.5px system-ui,sans-serif;fill:currentColor}
+.hbmap .c{font:600 10px ui-monospace,monospace;fill:var(--mut,#8a97a6)}
+.hbmap .c.g{fill:var(--good)} .hbmap .c.b{fill:var(--bad)}
+.hbmap .tr{fill:var(--line)} .hbmap .me{fill:var(--good)} .hbmap .rv{fill:var(--bad)} .hbmap .rk{fill:var(--warn)}
+.hbmap .ed{fill:none;stroke:var(--line2);stroke-width:1.4}
+.hbmap .ed.lag{stroke-dasharray:4 3}
+.hbmap .ah{fill:var(--line2)}
+.hblg{display:flex;flex-wrap:wrap;gap:4px 12px;justify-content:center;margin-top:4px}
+.hblg i{display:inline-block;width:10px;height:8px;border-radius:2px;margin-right:4px;vertical-align:middle}
+.hblg i.me{background:var(--good)} .hblg i.rv{background:var(--bad)} .hblg i.rk{background:var(--warn);border-radius:50%;width:8px}

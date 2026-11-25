@@ -64,6 +64,23 @@
 .hbtpls .choice.on{border-color:var(--heat, var(--warn));box-shadow:0 0 0 1px var(--heat, var(--warn)) inset}
 @media (max-width:520px){.hbtbl th:nth-child(5),.hbtbl td:nth-child(5){display:none}.hbsecs{grid-template-columns:repeat(2,1fr)}}
 
+.hbmap{margin:6px 0 4px}
+.hbmap svg{width:100%;max-width:520px;height:auto;display:block;margin:0 auto}
+.hbmap .bx{fill:var(--panel2);stroke:var(--line2);stroke-width:1}
+.hbmap .bx.you{fill:color-mix(in srgb, var(--warn) 14%, var(--panel2));stroke:var(--warn)}
+.hbmap .hbn{cursor:pointer}
+.hbmap .hbn.on .bx,.hbmap .hbn:focus .bx{stroke:var(--warn);stroke-width:2}
+.hbmap .t{font:600 10.5px system-ui,sans-serif;fill:currentColor}
+.hbmap .c{font:600 10px ui-monospace,monospace;fill:var(--mut,#8a97a6)}
+.hbmap .c.g{fill:var(--good)} .hbmap .c.b{fill:var(--bad)}
+.hbmap .tr{fill:var(--line)} .hbmap .me{fill:var(--good)} .hbmap .rv{fill:var(--bad)} .hbmap .rk{fill:var(--warn)}
+.hbmap .ed{fill:none;stroke:var(--line2);stroke-width:1.4}
+.hbmap .ed.lag{stroke-dasharray:4 3}
+.hbmap .ah{fill:var(--line2)}
+.hblg{display:flex;flex-wrap:wrap;gap:4px 12px;justify-content:center;margin-top:4px}
+.hblg i{display:inline-block;width:10px;height:8px;border-radius:2px;margin-right:4px;vertical-align:middle}
+.hblg i.me{background:var(--good)} .hblg i.rv{background:var(--bad)} .hblg i.rk{background:var(--warn);border-radius:50%;width:8px}
+
 </style>
 </head>
 <body>
@@ -13720,6 +13737,40 @@ function hbAutoDaily(S){
   }
 }
 
+
+/* ---------- Denge: holding iskontosu ve zorunlu satış ---------- */
+// Çok şirket kontrol etmek verimi düşürür: 4. kontrolden itibaren her biri −%1,5, en fazla −%35 (değer ve temettü)
+function hbCtlCount(S){ let n = 0; for (const id in S.hold.cos) if (S.hold.cos[id].own >= 0.51) n++; return n; }
+function hbDiscount(S){ if (!S.hold) return 1; const n = S.hb && S.hb._n != null && S.hb._nd === S.day ? S.hb._n : hbCtlCount(S); if (S.hb){ S.hb._n = n; S.hb._nd = S.day; } return Math.max(0.65, 1 - 0.015 * Math.max(0, n - 3)); }
+const _hbVal = hdVal;
+hdVal = function(S, id){ const v = _hbVal(S, id); return S.hold && S.hold.cos[id] && S.hold.cos[id].own >= 0.51 ? v * hbDiscount(S) : v; };
+// Aynı sektörde 360 günde 3. ceza → 60 gün içinde sektör payını %50 altına indir; yoksa fazlası değerin %70'ine zorla satılır
+function hbForcedDaily(S){
+  const H = S.hold, F = S.hb.force || (S.hb.force = {});
+  for (const s of HD_SECS){
+    const sh = hdShare(S, s.id), n = H.fines.filter(f => f.sec === s.id && S.day - f.d <= 360).length, o = F[s.id];
+    if (!o && n >= 3 && sh > 0.5 && s.id !== 'exons'){
+      F[s.id] = { due: S.day + 60, at: S.day };
+      const t = `Rekabet Kurumu ${s.short} sektöründe zorunlu satış kararı verdi: 60 gün içinde payını %50'nin altına indir, yoksa fazlası değerin %70'ine satılacak.`;
+      log(S, t, 'bad'); if (typeof notify === 'function') notify(S, t, 'crisis'); hdEv(S, t); hbOp(S, t);
+      if (S.social) try { addPost(S, { a: newsAuthor(S), title: `Rekabet Kurumu'ndan ${S.brand} Labs'a zorunlu satış kararı`, text: `${s.name} sektöründe hâkim durum tespit edildi. Şirkete 60 gün süre verildi.`, topic: 'general', ctx: { b: S.brand }, tag: '#RekabetKurumu', nComments: 3, mood: -0.5 }); } catch (e) {}
+      continue;
+    }
+    if (o){
+      if (sh <= 0.5){ delete F[s.id]; hbOp(S, `${s.short}: zorunlu satış kararı yerine getirildi.`); continue; }
+      if (S.day >= o.due){
+        let got = 0; const list = HD_LIST[s.id].filter(c => hdCtl(S, c.id) === -1).sort((a, b) => a.w - b.w);
+        for (const c of list){ if (hdShare(S, s.id) <= 0.5) break; const st = H.cos[c.id], d = +(st.own - 0.49).toFixed(3); if (d < 0.01) continue;
+          const g = Math.round(hdSellGain(S, c.id, d) * 0.7); st.own = +(st.own - d).toFixed(4); st.sold = Math.min(1, +(st.sold + d).toFixed(4)); st.m.emb = {}; S.cash += g; got += g; hdBump(S); }
+        delete F[s.id];
+        const t = `${s.short}: zorunlu satış uygulandı, paylar değerin %70'ine satıldı (+${fmtMoney(got)}).`; log(S, t, 'bad'); hdEv(S, t); hbOp(S, t);
+        if (typeof smShift === 'function' && S.sm) try { smShift(S, { t: -4 }, 'Rekabet Kurumu zorunlu satış uyguladı', ['med', 'eth', 'inv'], true); } catch (e) {}
+      }
+    }
+  }
+}
+function hbStats(S){ const st = S.hb.st, fz = S.hold.fines; const last = fz[fz.length - 1]; if (last && last !== st._lf){ st._lf = last; st.fines = (st.fines || 0) + last.amt; st.finesN = (st.finesN || 0) + 1; } st.div = (st.div || 0) + Math.max(0, S.hold.net || 0); }
+
 /* ---------- Günlük döngü ---------- */
 const _hbTick = tick;
 tick = function(S){
@@ -13728,7 +13779,7 @@ tick = function(S){
     hbEnsure(S);
     try {
       for (const k in S.hb.heat){ S.hb.heat[k] *= HB_HEAT_DECAY; if (S.hb.heat[k] < 0.002) delete S.hb.heat[k]; }
-      hbRetainDaily(S); hbRulesDaily(S); hbAutoDaily(S);
+      hbRetainDaily(S); hbRulesDaily(S); hbAutoDaily(S); hbForcedDaily(S); hbStats(S);
     } catch (e) { if (typeof globalThis !== 'undefined' && globalThis.__hbDebug) throw e; S.hb.err = (e && e.message) || 'hata'; }
   }
   return r;
@@ -22525,6 +22576,35 @@ if (typeof S !== 'undefined' && S){ try { const mg = MIGRATIONS[MIGRATIONS.lengt
       <div class="small">Şu katın altını reddet</div><div class="hdc">${[1, 1.1, 1.2, 1.3].map(v => `<button class="chip ${R.rej === v ? 'on' : ''}" data-a="hbrule" data-v="rej:${v}">${hdX(v)}</button>`).join('')}</div>
       <div class="small">Karşı teklifi şu kata kadar kabul et</div><div class="hdc">${[1.1, 1.25, 1.4, 1.6].map(v => `<button class="chip ${R.ctr === v ? 'on' : ''}" data-a="hbrule" data-v="ctr:${v}">${hdX(v)}</button>`).join('')}</div></div>`;
   }
+
+  // ---------- Tedarik zinciri haritası ----------
+  function chainMap(){
+    const H = S.hold, ex = H.ex || {}, W = 340, Hh = 330;
+    const pos = { exons: [170, 34], mine: [80, 104], elec: [262, 104], hbm: [80, 174], gpu: [80, 244], sto: [196, 244], me: [262, 300] };
+    const info = sec => { let me = 0, rv = 0, eb = 0; for (const c of HD_LIST[sec]){ const ctl = hdCtl(S, c.id); if (ctl === -1){ me += c.w; for (const k in H.cos[c.id].m.emb) if (H.cos[c.id].m.emb[k] > S.day) eb++; } else if (ctl != null) rv += c.w; }
+      const tot = HD_LIST[sec].reduce((a, c) => a + c.w, 0) || 1; return { me: me / tot, rv: rv / tot, eb, cost: hdPass(S, sec, -1), risk: H.risk[sec] || 0 }; };
+    const node = (sec, label) => { const [x, y] = pos[sec], I = info(sec), w = 112, h = 44, x0 = x - w / 2, y0 = y - h / 2;
+      const meW = Math.round(I.me * (w - 12)), rvW = Math.round(I.rv * (w - 12));
+      return `<g class="hbn ${U.sec === sec ? 'on' : ''}" data-a="hbsec" data-v="${sec}" role="button" tabindex="0" aria-label="${e(label)}: payın ${Math.round(I.me * 100)}%, maliyet çarpanın ${hdX(I.cost)}">
+        <rect x="${x0}" y="${y0}" width="${w}" height="${h}" rx="9" class="bx"/>
+        <text x="${x0 + 8}" y="${y0 + 15}" class="t">${e(label)}${I.eb ? ' ⛔' + I.eb : ''}</text>
+        <text x="${x0 + w - 8}" y="${y0 + 15}" class="c ${I.cost < 0.995 ? 'g' : I.cost > 1.005 ? 'b' : ''}" text-anchor="end">${hdX(I.cost)}</text>
+        <rect x="${x0 + 6}" y="${y0 + 27}" width="${w - 12}" height="7" rx="3" class="tr"/>
+        <rect x="${x0 + 6}" y="${y0 + 27}" width="${meW}" height="7" rx="3" class="me"/>
+        <rect x="${x0 + 6 + (w - 12) - rvW}" y="${y0 + 27}" width="${rvW}" height="7" rx="3" class="rv"/>
+        ${I.risk > 40 ? `<circle cx="${x0 + w - 4}" cy="${y0 + 4}" r="5" class="rk"/>` : ''}</g>`; };
+    const edge = (a, b, lag) => { const [x1, y1] = pos[a], [x2, y2] = pos[b]; const sy = y1 + (y2 > y1 ? 22 : 0), ey = y2 - (y2 > y1 ? 22 : 0);
+      const mx = (x1 + x2) / 2, my = (sy + ey) / 2;
+      return `<path d="M${x1} ${sy} C ${x1} ${my}, ${x2} ${my}, ${x2} ${ey}" class="ed ${lag ? 'lag' : ''}" marker-end="url(#hbar)"/>`; };
+    const eff = ex.eff != null ? ex.eff : 1;
+    return `<div class="hbmap"><svg viewBox="0 0 ${W} ${Hh}" role="img" aria-label="Tedarik zinciri haritası">
+      <defs><marker id="hbar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8z" class="ah"/></marker></defs>
+      ${edge('exons', 'mine', 1)}${edge('exons', 'elec', 1)}${edge('mine', 'hbm')}${edge('hbm', 'gpu')}${edge('hbm', 'sto')}${edge('mine', 'sto')}${edge('gpu', 'me')}${edge('sto', 'me')}${edge('elec', 'me')}
+      ${node('exons', 'EXONS · çıktı ' + Math.round(eff * 100) + '%')}${node('mine', 'Maden')}${node('elec', 'Elektrik')}${node('hbm', 'HBM bellek')}${node('gpu', 'GPU')}${node('sto', 'RAM/Dep.')}
+      <g><rect x="${pos.me[0] - 56}" y="${pos.me[1] - 18}" width="112" height="36" rx="9" class="bx you"/><text x="${pos.me[0]}" y="${pos.me[1] + 5}" class="t" text-anchor="middle">Senin tesislerin</text></g>
+    </svg>
+    <div class="hblg small dim"><span><i class="me"></i>Senin kontrolün</span><span><i class="rv"></i>Rakip kontrolü</span><span>×: sana maliyet çarpanı</span><span>⛔ ambargo · <i class="rk"></i> ceza riski</span><span>Kesikli ok: EXONS etkisi 30–90 gün gecikmeli</span></div></div>`;
+  }
   function bulkCard(){
     if (!S.hold) return '';
     hbEnsure(S);
@@ -22534,7 +22614,7 @@ if (typeof S !== 'undefined' && S){ try { const mg = MIGRATIONS[MIGRATIONS.lengt
     const needSel = U.mode !== 'auto' && !(U.mode === 'buy' && U.bmode === 'budget') && !ids.length;
     const ops = S.hb.ops.slice(0, 4);
     return `<div class="card hbcard"><div class="h"><h2>Portföy ve toplu işlemler</h2><button class="link" data-a="hbopen">${U.open ? 'Gizle' : 'Aç'}</button></div>
-      ${U.open ? `${secRow()}
+      ${U.open ? `${chainMap()}${secRow()}
       <div class="hdc"><button class="chip ${U.sec === 'all' ? 'on' : ''}" data-a="hbsec" data-v="all">Tüm sektörler</button>${ST.map(([k, n]) => `<button class="chip ${U.st === k ? 'on' : ''}" data-a="hbst" data-v="${k}">${n}</button>`).join('')}</div>
       ${table(L)}
       <div class="hbbar"><span class="small"><b>${ids.length}</b> seçili</span><button class="link" data-a="hbclr" ${ids.length ? '' : 'disabled'}>Temizle</button></div>

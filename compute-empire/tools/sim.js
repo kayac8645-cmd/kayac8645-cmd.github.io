@@ -3,6 +3,8 @@
 const fs = require('fs'), vm = require('vm'), path = require('path');
 const load = require('./load-engine');
 const file = process.argv[2], DAYS = +(process.argv[3] || 365), SEED = +(process.argv[4] || 7);
+const argOf = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
+const STRAT = argOf('--strat', 'none'), BONUS = +argOf('--cash', 0), BONUS_DAY = +argOf('--cashday', 240);
 const dumpIdx = process.argv.indexOf('--dump'), dumpFile = dumpIdx > 0 ? process.argv[dumpIdx + 1] : null;
 const C = load(file);
 const trc = { module: { exports: {} } }; vm.createContext(trc);
@@ -14,7 +16,17 @@ S.brand = S.brand || 'Nebula';
 let ver = 1, t0 = Date.now(), stalls = 0;
 const ok = r => r && r.ok !== false;
 
+function holdBot(){
+  if (!S.hold || !C.hbBuy || STRAT === 'none') return;
+  if (S.day === BONUS_DAY + 1){ S.hb.auto.on = true; S.hb.rule.on = true; S.hb.auto.cashMin = S.cash * 0.2; }
+  if (S.day < BONUS_DAY + 1 || S.day % 30 !== 1) return;
+  const all = C.HD_COS.map(c => c.id);
+  if (STRAT === 'hold'){ C.hbBuy(S, all, 'budget', S.cash * 0.3, false); C.hbApplyTpl(S, all, 'cheap'); }
+  if (STRAT === 'greedy'){ C.hbBuy(S, all, 'target', 1, true); C.hbApplyTpl(S, all, 'squeeze'); }
+}
 function bot(){
+  if (BONUS && S.day === BONUS_DAY) S.cash += BONUS;
+  holdBot();
   if (S.pending){ C.actResolve(S, 0); }
   for (const c of S.crises || []) if (!c.handled){ try { const o = C.crisisOptions(S, c).find(o => !o.cost || o.cost < S.cash * 0.3); if (o) C.actCrisis(S, c.uid, o.id); } catch (e) {} }
   // yayın
@@ -97,7 +109,11 @@ const out = {
   bos_yanit_oran: +(generic / Math.max(1, reps.length)).toFixed(3),
   yanit_tutarlilik_oran: +(coh / Math.max(1, reps.length)).toFixed(3),
   farkli_kisi: ppl.size, kayit_kb: Math.round(JSON.stringify(S).length / 1024),
-  modeller: S.models.length, kamuoyu: Math.round(S.social.sent), kamuoyu_ort: Math.round(sentSum / DAYS), nakit: Math.round(S.cash),
+  modeller: S.models.length, en_iyi: S.models.length ? Math.round(C.bestScore(S)) : 0, rakip_en_iyi: Math.round(C.topRivalScore(S)),
+  holding_deger: S.hold ? Math.round(S.hold.tv) : 0, net_varlik: Math.round(S.cash + (S.hold ? S.hold.tv : 0)), degerleme: Math.round(C.valuation(S)),
+  kontrol: S.hold ? Object.keys(S.hold.cos).filter(id => C.hdCtl(S, id) === -1).length : 0, ceza_n: S.hold ? S.hold.fines.length : 0, ceza_top: S.hold ? Math.round(S.hold.fines.reduce((a, f) => a + f.amt, 0)) : 0,
+  yatirim: S.hb ? Math.round(S.hb.st.spent) : 0, temettu: S.hb ? Math.round(S.hb.st.div || 0) : 0, ceza_gercek: S.hb ? Math.round(S.hb.st.fines || 0) : 0, ceza_adet: S.hb ? (S.hb.st.finesN || 0) : 0,
+  gpu_maliyet: S.hold ? +C.hdPass(S, 'gpu', -1).toFixed(3) : 1, strat: STRAT, kazandi: !!S.won, kamuoyu: Math.round(S.social.sent), kamuoyu_ort: Math.round(sentSum / DAYS), nakit: Math.round(S.cash),
 };
 console.log(JSON.stringify(out, null, 1));
 if (dumpFile){

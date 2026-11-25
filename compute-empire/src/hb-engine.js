@@ -263,6 +263,40 @@ function hbAutoDaily(S){
   }
 }
 
+
+/* ---------- Denge: holding iskontosu ve zorunlu satış ---------- */
+// Çok şirket kontrol etmek verimi düşürür: 4. kontrolden itibaren her biri −%1,5, en fazla −%35 (değer ve temettü)
+function hbCtlCount(S){ let n = 0; for (const id in S.hold.cos) if (S.hold.cos[id].own >= 0.51) n++; return n; }
+function hbDiscount(S){ if (!S.hold) return 1; const n = S.hb && S.hb._n != null && S.hb._nd === S.day ? S.hb._n : hbCtlCount(S); if (S.hb){ S.hb._n = n; S.hb._nd = S.day; } return Math.max(0.65, 1 - 0.015 * Math.max(0, n - 3)); }
+const _hbVal = hdVal;
+hdVal = function(S, id){ const v = _hbVal(S, id); return S.hold && S.hold.cos[id] && S.hold.cos[id].own >= 0.51 ? v * hbDiscount(S) : v; };
+// Aynı sektörde 360 günde 3. ceza → 60 gün içinde sektör payını %50 altına indir; yoksa fazlası değerin %70'ine zorla satılır
+function hbForcedDaily(S){
+  const H = S.hold, F = S.hb.force || (S.hb.force = {});
+  for (const s of HD_SECS){
+    const sh = hdShare(S, s.id), n = H.fines.filter(f => f.sec === s.id && S.day - f.d <= 360).length, o = F[s.id];
+    if (!o && n >= 3 && sh > 0.5 && s.id !== 'exons'){
+      F[s.id] = { due: S.day + 60, at: S.day };
+      const t = `Rekabet Kurumu ${s.short} sektöründe zorunlu satış kararı verdi: 60 gün içinde payını %50'nin altına indir, yoksa fazlası değerin %70'ine satılacak.`;
+      log(S, t, 'bad'); if (typeof notify === 'function') notify(S, t, 'crisis'); hdEv(S, t); hbOp(S, t);
+      if (S.social) try { addPost(S, { a: newsAuthor(S), title: `Rekabet Kurumu'ndan ${S.brand} Labs'a zorunlu satış kararı`, text: `${s.name} sektöründe hâkim durum tespit edildi. Şirkete 60 gün süre verildi.`, topic: 'general', ctx: { b: S.brand }, tag: '#RekabetKurumu', nComments: 3, mood: -0.5 }); } catch (e) {}
+      continue;
+    }
+    if (o){
+      if (sh <= 0.5){ delete F[s.id]; hbOp(S, `${s.short}: zorunlu satış kararı yerine getirildi.`); continue; }
+      if (S.day >= o.due){
+        let got = 0; const list = HD_LIST[s.id].filter(c => hdCtl(S, c.id) === -1).sort((a, b) => a.w - b.w);
+        for (const c of list){ if (hdShare(S, s.id) <= 0.5) break; const st = H.cos[c.id], d = +(st.own - 0.49).toFixed(3); if (d < 0.01) continue;
+          const g = Math.round(hdSellGain(S, c.id, d) * 0.7); st.own = +(st.own - d).toFixed(4); st.sold = Math.min(1, +(st.sold + d).toFixed(4)); st.m.emb = {}; S.cash += g; got += g; hdBump(S); }
+        delete F[s.id];
+        const t = `${s.short}: zorunlu satış uygulandı, paylar değerin %70'ine satıldı (+${fmtMoney(got)}).`; log(S, t, 'bad'); hdEv(S, t); hbOp(S, t);
+        if (typeof smShift === 'function' && S.sm) try { smShift(S, { t: -4 }, 'Rekabet Kurumu zorunlu satış uyguladı', ['med', 'eth', 'inv'], true); } catch (e) {}
+      }
+    }
+  }
+}
+function hbStats(S){ const st = S.hb.st, fz = S.hold.fines; const last = fz[fz.length - 1]; if (last && last !== st._lf){ st._lf = last; st.fines = (st.fines || 0) + last.amt; st.finesN = (st.finesN || 0) + 1; } st.div = (st.div || 0) + Math.max(0, S.hold.net || 0); }
+
 /* ---------- Günlük döngü ---------- */
 const _hbTick = tick;
 tick = function(S){
@@ -271,7 +305,7 @@ tick = function(S){
     hbEnsure(S);
     try {
       for (const k in S.hb.heat){ S.hb.heat[k] *= HB_HEAT_DECAY; if (S.hb.heat[k] < 0.002) delete S.hb.heat[k]; }
-      hbRetainDaily(S); hbRulesDaily(S); hbAutoDaily(S);
+      hbRetainDaily(S); hbRulesDaily(S); hbAutoDaily(S); hbForcedDaily(S); hbStats(S);
     } catch (e) { if (typeof globalThis !== 'undefined' && globalThis.__hbDebug) throw e; S.hb.err = (e && e.message) || 'hata'; }
   }
   return r;
