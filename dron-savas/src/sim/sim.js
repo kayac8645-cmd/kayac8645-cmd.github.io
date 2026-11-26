@@ -24,6 +24,7 @@ import { updateFlood } from './damage.js';
 import { updateAI, initAI } from '../ai/ai.js';
 
 export const SIM_VERSION = 3;
+export { PERSONALITIES };
 export const TICK_MS = 100;
 export const MAX_COUNTRIES = 24;
 
@@ -58,8 +59,7 @@ export class Simulation {
     });
     this.diplo = new Diplomacy(n);
     initEnv(this);
-    this.setupInitial();
-    initAI(this);
+    if (!o.skipSetup) { this.setupInitial(); initAI(this); }
   }
 
   // ---- yardımcılar ----

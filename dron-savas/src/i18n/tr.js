@@ -1,0 +1,71 @@
+// Türkçe metin tablosu. Yeni dil: aynı anahtarlarla yeni dosya + i18n.js'de kayıt.
+export default {
+  title: 'DRON SAVAŞI', subtitle: 'Koloni ve modern savaş simülasyonu',
+  m_new: 'Yeni Oyun', m_continue: 'Devam Et', m_load: 'Kayıtlar', m_settings: 'Ayarlar', m_spectate: 'İzleyici Modu (YZ vs YZ)', m_back: 'Geri', m_start: 'Başlat',
+  m_seed: 'Dünya tohumu', m_size: 'Harita boyutu', m_ai: 'Rakip sayısı', m_diff: 'Zorluk', m_random: 'Rastgele', m_exp24: '24 ülke (deneysel)',
+  sz_small: 'Küçük 256²', sz_medium: 'Orta 512²', sz_large: 'Büyük 1024²',
+  diff_easy: 'Kolay', diff_normal: 'Normal', diff_hard: 'Zor', diff_expert: 'Uzman',
+  s_quality: 'Grafik kalitesi', q_low: 'Düşük', q_med: 'Orta', q_high: 'Yüksek', s_sound: 'Ses', s_on: 'Açık', s_off: 'Kapalı', s_volume: 'Ses düzeyi', s_renderer: 'Çizici', s_vibrate: 'Titreşim',
+  loading: 'Dünya oluşturuluyor…', loading_art: 'Sprite atlası çiziliyor…', saving: 'Kaydediliyor…', saved: 'Oyun kaydedildi', loaded: 'Oyun yüklendi', no_save: 'Kayıt bulunamadı', save_err: 'Kayıt hatası',
+  autosave: 'Otomatik kayıt', slot: 'Yuva', empty: 'Boş', day: 'Gün', paused: 'DURAKLATILDI',
+  // üst şerit
+  r_money: 'Bütçe', r_power: 'Elektrik', r_pop: 'Nüfus', r_morale: 'Moral', r_work: 'İş gücü',
+  r_iron: 'Demir', r_coal: 'Kömür', r_oil: 'Petrol', r_gas: 'Doğalgaz', r_copper: 'Bakır', r_uranium: 'Uranyum', r_rare: 'Nadir toprak', r_steel: 'Çelik', r_fuel: 'Yakıt', r_electronics: 'Elektronik', r_explosives: 'Patlayıcı', r_composite: 'Kompozit', r_supply: 'İkmal',
+  season_0: 'İlkbahar', season_1: 'Yaz', season_2: 'Sonbahar', season_3: 'Kış',
+  w_clear: 'Açık', w_rain: 'Yağmur', w_fog: 'Sis', w_storm: 'Fırtına', w_snow: 'Kar', mud: 'Çamur',
+  // katmanlar
+  l_normal: 'Normal', l_power: 'Elektrik', l_logistics: 'Lojistik', l_airdef: 'Hava savunma', l_ew: 'Elektronik harp', l_resources: 'Kaynaklar', l_front: 'Cephe',
+  // paneller
+  p_build: 'İnşa', p_prod: 'Üretim', p_research: 'Araştırma', p_diplo: 'Diplomasi', p_intel: 'İstihbarat', p_log: 'Olaylar', p_menu: 'Menü', p_market: 'Piyasa', p_ew: 'EH',
+  cat_eco: 'Ekonomi', cat_pow: 'Enerji', cat_mil: 'Askerî', cat_def: 'Savunma', cat_log: 'Lojistik',
+  hardened: 'Gömülü/dağınık (×1.8 maliyet, %60 az hasar)', place_hint: 'Yerleştirmek için haritaya dokun, onayla', confirm: 'Onayla', cancel: 'İptal', close: 'Kapat',
+  // bağlam
+  a_repair_prio: 'Onarım önceliği', a_demolish: 'Yık', a_product: 'Ürün', a_stop: 'Durdur', a_emit_on: 'Yayın: AÇIK', a_emit_off: 'Yayın: KAPALI', a_mission: 'Görev', a_fire: 'Ateş',
+  a_move: 'İlerle', a_attack: 'Saldır', a_hold: 'Tut', a_capture: 'Ele geçir', a_recall: 'Geri çağır', a_route: 'Rota çiz', a_target: 'Hedef seç', a_patrol: 'Devriye', a_count: 'Adet', a_auto: 'Otomatik rota', a_select_all: 'Tümü', a_jam_bands: 'Karıştırma bantları',
+  hint_target: 'Hedefe dokun', hint_route: 'Parmağınla rota çiz, bırakınca gönder', hint_move: 'Hedef bölgeye dokun', hint_area: 'Seçmek için sürükle',
+  st_hp: 'Sağlık', st_power: 'Elektrik', st_workers: 'İşçi', st_connected: 'Yol bağlantısı', st_linked: 'Haberleşme', st_supply: 'İkmal', st_entrench: 'Tahkimat', st_fuel: 'Batarya/Yakıt', st_band: 'Bant', st_stock: 'Stok', st_producing: 'Üretiyor', st_noinput: 'Girdi yok', st_idle: 'Boşta', st_ruined: 'Harabe', st_building: 'İnşa ediliyor', st_gen: 'Jeneratörde', st_yes: 'var', st_no: 'yok', st_pop: 'Nüfus', st_water: 'Su', st_morale: 'Moral', st_jammed: 'Karıştırılıyor', st_linklost: 'Bağlantı koptu', st_owner: 'Sahip', st_known: 'İstihbarat (eski)',
+  prio_0: 'Yok', prio_1: 'Normal', prio_2: 'Yüksek', prio_3: 'Kritik',
+  // diplomasi
+  d_war: 'Savaş ilan et', d_peace: 'Barış öner', d_ceasefire: 'Ateşkes öner', d_alliance: 'İttifak öner', d_break: 'İttifakı boz', d_trade: 'Ticaret', d_buy: 'Silah satın al', d_accept: 'Kabul', d_reject: 'Reddet',
+  ds_0: 'Barış', ds_1: 'SAVAŞ', ds_2: 'Ateşkes', ds_3: 'Müttefik', rel: 'İlişki', strength: 'Güç', you: 'Sen', personality: 'Kişilik',
+  pers_aggressive: 'Saldırgan', pers_defensive: 'Savunmacı', pers_industrial: 'Sanayici', pers_opportunist: 'Fırsatçı', pers_alliance: 'İttifakçı', pers_technocrat: 'Teknokrat',
+  // araştırma
+  br_drone: 'Dronlar', br_missile: 'Füzeler', br_ad: 'Hava savunma', br_ew: 'Elektronik harp', br_industry: 'Sanayi', br_energy: 'Enerji', br_logistics: 'Lojistik',
+  researching: 'Araştırılıyor', research_pts: 'Araştırma puanı', done: 'Tamam', locked: 'Kilitli',
+  // istihbarat
+  i_known_b: 'Bilinen düşman tesisleri', i_known_u: 'Görülen düşman birlikleri', i_emitters: 'Sinyal kaynakları', i_ad_eff: 'Hava savunma: atış / harcama', i_kills: 'İmha / kayıp', i_drones: 'Fırlatılan / kaybedilen dron', i_jam: 'Karıştırma kaybı', i_band: 'Aktif dron bandı', i_change_band: 'Bandı değiştir',
+  // piyasa
+  mk_buy: 'Al', mk_sell: 'Sat', mk_price: 'Fiyat', mk_hint: 'Savaşta ithalat %50 pahalı (abluka)',
+  // binalar
+  b_hq: 'Komuta Merkezi (Başkent)', b_cmd: 'Komuta Merkezi', b_depot: 'Depo', b_rail: 'Tren İstasyonu', b_mine: 'Maden', b_well: 'Kuyu', b_refinery: 'Rafineri', b_steel_mill: 'Çelik Fabrikası', b_electronics: 'Elektronik Fabrikası', b_munitions: 'Mühimmat Fabrikası', b_drone_fac: 'Dron Montaj Tesisi', b_missile_fac: 'Füze Fabrikası', b_barracks: 'Kışla', b_vehicle_fac: 'Araç Fabrikası', b_research: 'Araştırma Merkezi',
+  b_coal_plant: 'Kömür Santrali', b_gas_plant: 'Gaz Santrali', b_hydro: 'Baraj (Hidroelektrik)', b_nuclear: 'Nükleer Santral', b_solar: 'Güneş Tarlası', b_substation: 'Trafo Merkezi', b_pump: 'Pompa İstasyonu', b_relay: 'Röle Kulesi', b_satellite: 'Uydu İstasyonu', b_drone_base: 'Dron Üssü', b_airbase: 'Havaalanı', b_port: 'Liman', b_missile_base: 'Füze Üssü', b_coastal: 'Kıyı Bataryası', b_radar: 'Erken Uyarı Radarı', b_sam_site: 'Uzun Menzilli SAM', b_aa_gun: 'Uçaksavar', b_ciws: 'Yakın Savunma (CIWS)', b_laser: 'Lazer Savunma', b_jammer: 'Karıştırıcı (Jammer)', b_sigint: 'SIGINT İstasyonu', b_bunker: 'Sığınak', b_bridge: 'Köprü',
+  // birimler
+  u_recon_quad: 'Keşif Dronu', u_recon_uav: 'Keşif İHA', u_fpv: 'FPV Kamikaze', u_fpv_fiber: 'Fiber FPV', u_bomber_quad: 'Bombacı Quadcopter', u_lr_kamikaze: 'Uzun Menzilli Kamikaze', u_male: 'Silahlı İHA (MALE)', u_interceptor_drone: 'Önleyici Dron', u_mothership: 'Ana Gemi Dron', u_naval_drone: 'Deniz Dronu', u_relay_drone: 'Röle Dronu', u_fighter: 'Savaş Uçağı', u_heli: 'Taarruz Helikopteri',
+  u_inf: 'Piyade Taburu', u_armor: 'Zırhlı Tabur', u_mech: 'Mekanize Tabur', u_artillery: 'Topçu', u_engineer: 'İstihkâm', u_ad_bat: 'Hava Savunma Taburu', u_ew_bat: 'EH Birliği', u_mlrs: 'Çok Namlulu Roketatar', u_sam_long: 'Uzun Menzilli SAM (mobil)', u_sam_med: 'Orta Menzilli SAM', u_sam_short: 'Kısa Menzilli SAM', u_corvette: 'Korvet',
+  // kalemler
+  i_recon_quad: 'Keşif Dronu', i_recon_uav: 'Keşif İHA', i_fpv: 'FPV Kamikaze', i_fpv_fiber: 'Fiber FPV', i_bomber_quad: 'Bombacı Quad', i_lr_kamikaze: 'Uzun Menzilli Kamikaze', i_male: 'MALE İHA', i_interceptor_drone: 'Önleyici Dron', i_mothership: 'Ana Gemi Dron', i_naval_drone: 'Deniz Dronu', i_relay_drone: 'Röle Dronu', i_fighter: 'Savaş Uçağı', i_heli: 'Helikopter',
+  i_rocket: 'Roket', i_guided_rocket: 'Güdümlü Roket', i_cruise: 'Seyir Füzesi', i_ballistic: 'Balistik Füze', i_antiship: 'Gemisavar Füze', i_arm: 'Radar Avcısı Füze', i_agm: 'Hava-Yer Füzesi', i_sam_l: 'Uzun Menzil Önleyici', i_sam_m: 'Orta Menzil Önleyici', i_sam_s: 'Kısa Menzil Önleyici',
+  p_rocket: 'roket', p_guided_rocket: 'güdümlü roket', p_cruise: 'seyir füzesi', p_ballistic: 'balistik füze', p_antiship: 'gemisavar füze', p_arm: 'radar avcısı', p_agm: 'hava-yer füzesi',
+  rc_fuel: 'Yakıt', rc_supply: 'İkmal', rc_explosives: 'Patlayıcı', rc_steel: 'Çelik', rc_electronics: 'Elektronik', rc_composite: 'Kompozit',
+  // teknolojiler
+  t_d_uav: 'Sabit kanat İHA', t_d_lr: 'Uzun menzilli kamikaze', t_d_fiber: 'Fiber optik FPV', t_d_relay: 'Röle dronları', t_d_swarm: 'Sürü algoritmaları', t_d_mother: 'Ana gemi dron', t_d_male: 'MALE İHA', t_d_naval: 'Deniz dronu', t_d_battery: 'Yüksek yoğunluklu batarya', t_d_thermal: 'Termal kamera', t_d_autoreturn: 'Otonom eve dönüş',
+  t_m_guided: 'Güdümlü roket', t_m_cruise: 'Seyir füzesi', t_m_arm: 'Radar avcısı füze', t_m_antiship: 'Gemisavar füze', t_m_ballistic: 'Balistik füze', t_m_terrain: 'Arazi takip seyri', t_m_ins: 'Ataletsel seyrüsefer (GPS bağımsız)',
+  t_a_med: 'Orta menzilli SAM', t_a_long: 'Uzun menzilli SAM', t_a_ciws: 'CIWS', t_a_intdrone: 'Önleyici dron', t_a_bmd: 'Balistik füze savunması', t_a_laser: 'Lazer silahları', t_a_radar: 'Gelişmiş radar',
+  t_e_jam: 'Karıştırıcılar', t_e_sigint: 'Sinyal istihbaratı', t_e_band1: 'Yeni bant: 7.2 GHz', t_e_band2: 'Yeni bant: 433 MHz', t_e_hop: 'Frekans atlamalı link', t_e_adapt: 'Uyarlanır karıştırma', t_e_spoof: 'GPS sahte sinyal', t_e_sat: 'Uydu haberleşme',
+  t_i_auto: 'Otomasyon', t_i_lean: 'Yalın üretim', t_i_mining: 'Gelişmiş madencilik', t_i_repair: 'Hızlı onarım', t_l_armor: 'Zırhlı araçlar', t_l_air: 'Klasik hava gücü',
+  t_p_grid: 'Akıllı şebeke', t_p_solar: 'Güneş enerjisi', t_p_nuclear: 'Nükleer enerji', t_p_eff: 'Enerji verimliliği', t_p_gen: 'Yedek jeneratörler',
+  t_g_rail: 'Demiryolu', t_g_trucks: 'Ağır kamyonlar', t_g_supply: 'İleri ikmal', t_l_comms: 'Komuta ağı', t_g_fort: 'Tahkimat mühendisliği',
+  // bildirimler
+  n_built: '{0} tamamlandı', n_unit: '{0} hazır', n_research: 'Araştırma tamamlandı: {0}', n_blackout: '{0} karanlığa gömüldü — elektrik kesik', n_destroyed: '{0} yıkıldı!', n_bridge: 'Köprü yıkıldı — ikmal yolu kesildi', n_flood: 'Baraj yıkıldı — aşağı vadi su altında!',
+  n_repaired: '{0} onarıldı', n_migration: '{0} halkı göç ediyor', n_war: '{0}, {1} ülkesine SAVAŞ İLAN ETTİ', n_betrayal: 'İHANET! {0}, müttefiki {1} ülkesine saldırdı', n_joinwar: '{0} müttefiki için {1} ile savaşa girdi',
+  n_peace: '{0} ile {1} barış yaptı', n_ceasefire: '{0} ile {1} ateşkes ilan etti', n_alliance: '{0} ile {1} ittifak kurdu', n_break: '{0}, {1} ile ittifakı bozdu', n_trade: '{0} ile ticaret anlaşması', n_bought: '{0} adet {1} satın alındı ({2})', n_sold: '{0} adet {1} satıldı ({2})',
+  n_proposal: '{0} öneriyor: {1}', n_rejected: '{0} reddetti: {1}', n_capital_fell: '{0} başkenti düştü! {1} ülkeyi ilhak etti', n_surrender: '{0} teslim oldu — {1} ilhak etti', n_victory: 'ZAFER: {0} tek hâkim güç!', n_alliance_end: 'Son aşama: tüm ittifaklar dağıldı',
+  n_incoming: 'FÜZE GELİYOR: {0}', n_noammo: 'Önleyici stoğu bitti: {0}', n_captured: '{0} düşmana düştü', n_city_lost: '{0} şehri düştü!', n_convoy_lost: 'Konvoy vuruldu', n_convoy_stuck: 'Konvoy yolda mahsur kaldı', n_nosupplyroute: '{0}: ikmal yolu yok, üretim birikiyor',
+  n_delayed: 'Haberleşme kopuk: emir gecikmeli iletilecek', n_jam_adapt: 'Karıştırıcımız {0} bandına uyum sağladı', n_band_jammed: 'Dronlarımızın {0} bandı karıştırılıyor — yeni frekans araştır/seç', n_sigint: 'Yeni düşman sinyali tespit edildi',
+  err_tech: 'Teknoloji gerekli', err_cost: 'Yetersiz kaynak', err_bounds: 'Harita dışı', err_territory: 'Kendi topraklarında olmalı', err_occupied: 'Alan dolu', err_terrain: 'Uygun olmayan arazi', err_road: 'Yolun üstüne kurulamaz', err_deposit: 'Maden yatağı üzerinde olmalı', err_oil: 'Petrol/gaz yatağı gerekli', err_river: 'Nehir üzerinde olmalı', err_coast: 'Kıyıda olmalı', err_water: 'Suya yakın olmalı', err_nopower: 'Üs elektriksiz', err_range: 'Menzil dışı', err_nostock: 'Stok yok: {0}', err_nopath: 'Rota bulunamadı', err_nobase: 'Uygun üs yok',
+  victory: 'ZAFER!', defeat: 'YENİLGİ', victory_txt: 'Tüm rakipler teslim oldu ya da başkentleri düştü.', defeat_txt: 'Ülken düştü.', winner_is: 'Kazanan: {0}', new_game: 'Yeni oyun',
+  tut_1: 'Sürükle: kamera · İki parmak: yakınlaştır · Dokun: seç · Basılı tut+sürükle: alan seçimi',
+  tut_2: 'Önce elektrik ve madenler: santral + trafo, demir/kömür madeni, çelik fabrikası.',
+  tut_3: 'Dron üssü seç → Görev: dron tipini ve adedi seç, hedefe dokun ya da rota çiz.',
+  fps: 'FPS', tick: 'Tick',
+};

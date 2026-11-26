@@ -50,7 +50,8 @@ function strategic(sim, b) {
   b.enemy = atWarWith.length ? atWarWith.sort((a, b2) => militaryStrength(sim, a.id) - militaryStrength(sim, b2.id))[0].id : nearest ? nearest.id : -1;
   if (b.enemy >= 0) { const cp = sim.world.countries[b.enemy].capital; b.front = [(b.home[0] + cp.x) / 2, (b.home[1] + cp.y) / 2]; }
   // savaş kararı
-  const grace = 2400 - p.aggr * 900; // ilk günler barış
+  // ilk günler barış: insan oyuncuya kurulum süresi (zorluk düştükçe uzar)
+  const grace = 4300 - p.aggr * 1500 + [3000, 1200, 0, -600][b.diff === DIFFICULTY[0] ? 0 : b.diff === DIFFICULTY[1] ? 1 : b.diff === DIFFICULTY[2] ? 2 : 3];
   if (sim.tick > grace && !noisy(b)) {
     if (!atWarWith.length) {
       let target = null, best = 0;
@@ -62,7 +63,7 @@ function strategic(sim, b) {
         const score = ratio * (0.6 + p.aggr) + busy - dist / (sim.map.W * 1.2) - d.relOf(c, o.id) / 120;
         if (score > best) { best = score; target = o; }
       }
-      const threshold = 1.55 - p.aggr * 0.6 - (sim.tick > 12000 ? 0.4 : 0);
+      const threshold = 1.55 - p.aggr * 0.6 - (sim.tick > 12000 ? 0.4 : 0) - (sim.tick > 36000 ? 0.5 : 0);
       if (target && best > threshold) sim.issue({ type: CMD.DIPLO, c, action: 'war', target: target.id });
     } else {
       // kaybediyorsa ateşkes/barış dene

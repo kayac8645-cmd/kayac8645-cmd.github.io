@@ -22,7 +22,7 @@ registerCommand(CMD.MISSION, (sim, cmd) => {
   if (!e.alive(b) || e.owner[b] !== cmd.c || !usable(e, b)) return false;
   const bd = sim.bdef(b); const ii = ITEM_BY[cmd.item]; const it = ITEMS[ii];
   if (!it || !it.unit || !baseFits(bd, it)) return false;
-  if (e.sat[b] < 0.3 && !(e.flags[b] & F.GENERATOR)) { sim.notify(cmd.c, 'err_nopower', [], e.x[b], e.y[b], 1); return false; }
+  if (e.sat[b] < 0.3 && !(e.flags[b] & F.GENERATOR)) { if (!co.ai) sim.notify(cmd.c, 'err_nopower', [], e.x[b], e.y[b], 1); return false; }
   const n = Math.max(1, Math.min(cmd.n | 0 || 1, Math.floor(co.items[ii])));
   if (co.items[ii] < 1) return false;
   const ui = UNIT_BY[it.unit]; const u = UNITS[ui];
@@ -31,7 +31,7 @@ registerCommand(CMD.MISSION, (sim, cmd) => {
   if (!route) route = cmd.auto === false ? [tx, ty] : planAirRoute(sim, cmd.c, e.x[b], e.y[b], tx, ty, (u.alt || 1) === 1);
   if (u.fiber) { // fiber: kablo boyu kadar
     const dx = tx - e.x[b], dy = ty - e.y[b], d = Math.sqrt(dx * dx + dy * dy);
-    if (d > u.maxDist) { sim.notify(cmd.c, 'err_range', [], tx, ty, 1); return false; }
+    if (d > u.maxDist) { if (!co.ai) sim.notify(cmd.c, 'err_range', [], tx, ty, 1); return false; }
   }
   let path = null;
   if (u.kind === 'naval') {
