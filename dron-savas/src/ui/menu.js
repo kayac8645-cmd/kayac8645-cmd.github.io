@@ -7,7 +7,7 @@ import { t } from '../i18n/i18n.js';
 
 export function showMenu(app) {
   const root = app.ui; clear(root);
-  const st = { seed: (Math.random() * 1e6) | 0, size: 'small', ai: 4, diff: 1, exp24: false };
+  const st = { seed: (Math.random() * 1e6) | 0, size: 'small', ai: 4, diff: 1, exp24: false, fog: true };
   const wrap = h('div', { class: 'menu' });
   const title = h('div', { class: 'mtitle' }, h('img', { class: 'logo', src: app.logo, alt: '' }), h('h1', {}, t('title')), h('p', {}, t('subtitle')));
   const main = () => {
@@ -17,7 +17,7 @@ export function showMenu(app) {
       btn(t('m_load'), () => saves(), 'big'),
       btn(t('m_spectate'), () => app.startNew({ seed: st.seed, size: MAP_SIZES.small, countries: 6, difficulty: 2, allAI: true, player: 0 }), 'big'),
       btn(t('m_settings'), () => settings(), 'big')),
-      h('p', { class: 'small foot' }, 'v0.15 · Kenney CC0 · Pixelify Sans OFL'));
+      h('p', { class: 'small foot' }, 'v0.16 · Pixelify Sans OFL'));
   };
   const newGame = () => {
     const sel = (opts, cur, on) => h('div', { class: 'seg' }, opts.map(([v, l]) => btn(l, () => { on(v); newGame(); }, cur === v ? 'on' : '')));
@@ -28,7 +28,9 @@ export function showMenu(app) {
       h('label', {}, `${t('m_ai')}: ${st.ai}`), h('input', { type: 'range', min: 1, max: maxAI, value: Math.min(st.ai, maxAI), oninput: (e) => { st.ai = +e.target.value; e.target.previousSibling.textContent = `${t('m_ai')}: ${st.ai}`; } }),
       h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: st.exp24, onchange: (e) => { st.exp24 = e.target.checked; if (!st.exp24) st.ai = Math.min(st.ai, 7); newGame(); } }), t('m_exp24')),
       h('label', {}, t('m_diff')), sel(DIFFICULTY.map((d, k) => [k, t('diff_' + d.id)]), st.diff, (v) => (st.diff = v)),
-      h('div', { class: 'mbtns' }, btn(t('m_start'), () => app.startNew({ seed: st.seed, size: MAP_SIZES[st.size], countries: st.ai + 1, difficulty: st.diff, player: 0 }), 'big ok'), btn(t('m_back'), main)));
+      h('label', {}, t('s_fog')), sel([[true, t('s_on')], [false, t('s_off')]], st.fog, (v) => (st.fog = v)),
+      h('p', { class: 'small' }, t('fog_hint')),
+      h('div', { class: 'mbtns' }, btn(t('m_start'), () => app.startNew({ seed: st.seed, size: MAP_SIZES[st.size], countries: st.ai + 1, difficulty: st.diff, player: 0, fog: st.fog }), 'big ok'), btn(t('m_back'), main)));
   };
   const saves = async () => {
     const s = await listSaves().catch(() => ({}));

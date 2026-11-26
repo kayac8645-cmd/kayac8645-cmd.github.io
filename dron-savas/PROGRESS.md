@@ -1,6 +1,6 @@
 # İlerleme
 
-Durum: **15 aşamanın tamamı uygulandı**. `release/DronSavasi.apk` üretiliyor, `node tests/run-all.mjs` tüm testleri geçiyor.
+Durum: **15 aşamanın tamamı + 0.16 görsel/arayüz yenilemesi uygulandı**. `release/DronSavasi.apk` üretiliyor, `node tests/run-all.mjs` tüm testleri geçiyor.
 
 | # | Aşama | Durum | Ana dosyalar |
 |---|---|---|---|

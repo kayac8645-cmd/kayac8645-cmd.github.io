@@ -4,7 +4,9 @@ import { CMD } from '../core/commands.js';
 import { TICK_MS } from '../sim/sim.js';
 import { BUILDINGS } from '../data/buildings.js';
 import { UNITS } from '../data/defs.js';
-import { canPlace } from '../sim/build.js';
+import { canPlace, findSpot } from '../sim/build.js';
+import { computeDeposits } from '../world/deposits.js';
+import { B } from '../data/buildings.js';
 import { GM } from '../sim/ground.js';
 import { LAUNCHERS, launcherKey } from '../sim/missiles.js';
 import { View } from '../render/view.js';
@@ -24,6 +26,7 @@ export class Game {
     this.view.setQuality(app.settings.quality);
     this.speed = 1; this.paused = false; this.acc = 0; this.last = performance.now(); this.mode = null; this.modeData = null;
     this.fps = 60; this.lastAutosave = sim.tick; this.tickMs = 0;
+    this.deposits = computeDeposits(sim.map); this.depSel = -1; this.repeatBuild = false;
     const cap = sim.world.countries[this.player]?.capital || { x: sim.map.W / 2, y: sim.map.H / 2 };
     this.view.cam.x = cap.x * TS; this.view.cam.y = cap.y * TS; this.view.cam.zoom = 3;
     this.hud = new HUD(this);
@@ -135,8 +138,29 @@ export class Game {
         this.issue({ type: CMD.MOVE_UNITS, ids: ground.filter((i) => UNITS[e.def[i]].repair), x: e.x[hit], y: e.y[hit] + 1.5, mode: GM.MOVE }); return;
       }
     }
-    this.view.sel.clear();
+    this.view.sel.clear(); this.depSel = -1;
     if (hit >= 0) this.view.sel.add(hit);
+    else { // maden yatağı
+      const map = this.sim.map;
+      for (const [dx, dy] of [[0, 0], [0, 1], [1, 0], [-1, 0], [0, -1]]) { const x = (wx | 0) + dx, y = (wy | 0) + dy; if (!map.inb(x, y)) continue; const di = this.deposits.idx[map.idx(x, y)]; if (di >= 0) { this.depSel = di; break; } }
+    }
+    this.hud.renderContext();
+  }
+  // yatağa maden/kuyu: uygun ilk yer bulunur, hayalet orada açılır
+  buildOnDeposit(d, bdef) {
+    const def = B[bdef]; let spot = null;
+    for (const ti of d.tiles) { const x = ti % this.sim.map.W, y = (ti / this.sim.map.W) | 0; spot = findSpot(this.sim, this.player, def, x + 0.5, y + 0.5, 2, this.sim.rng, true); if (spot) break; }
+    this.depSel = -1;
+    this.setMode('build', { def, hard: false });
+    if (spot) { const r = canPlace(this.sim, this.player, def, spot[0], spot[1]); this.view.ghost = { def, x: spot[0], y: spot[1], ok: !r, reason: r }; this.jumpTo(spot[0] + 1, spot[1] + 1); }
+    this.hud.renderContext();
+  }
+  // inşa modu açılınca hayaleti ekran ortasındaki uygun yere koy
+  startBuild(def, hard) {
+    this.setMode('build', { def, hard });
+    const [cx, cy] = this.s2w(this.app.renderer.W / 2, this.app.renderer.H / 2);
+    const s = findSpot(this.sim, this.player, def, cx, cy, 12, this.sim.rng, false);
+    if (s) { const r = canPlace(this.sim, this.player, def, s[0], s[1], { hardened: hard }); this.view.ghost = { def, x: s[0], y: s[1], ok: !r, reason: r }; }
     this.hud.renderContext();
   }
   area(x0, y0, x1, y1, done) {
@@ -162,7 +186,9 @@ export class Game {
   confirmBuild() {
     const g = this.view.ghost; if (!g || !g.ok) return;
     this.issue({ type: CMD.BUILD, def: g.def, x: g.x, y: g.y, hard: !!this.modeData.hard });
-    this.view.ghost = null; this.hud.renderContext();
+    if (this.repeatBuild) this.view.ghost = { ...g, ok: false, reason: 'err_occupied' }; // aynı türden bir tane daha: yeni yere dokun
+    else this.setMode(null);
+    this.hud.renderContext();
   }
   // görev: dron üssünden
   startMission(base, item, n, how) {

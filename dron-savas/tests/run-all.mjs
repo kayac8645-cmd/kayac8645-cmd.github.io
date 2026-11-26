@@ -29,5 +29,9 @@ const bt = performance.now() - t0; ok('1024² harita kurulum + 300 tick', bt < 1
 // 6) 24 ülke desteği
 const m24 = new Simulation({ seed: 9, size: 512, countries: 24, allAI: true }); for (let k = 0; k < 400; k++) { m24.step(); m24.events.length = 0; }
 ok('24 ülke', m24.countries.length === 24, `${m24.countries.length} ülke, ${m24.e.count} varlık`);
+// 7) savaş sisi kapalı: tüm ülkeler (YZ dahil) her şeyi görür
+const nf = new Simulation({ seed: 21, size: 256, countries: 4, allAI: true, fog: false }); for (let k = 0; k < 60; k++) { nf.step(); nf.events.length = 0; }
+const allKnown = nf.countries.every((c) => [...Array(nf.e.hi).keys()].filter((i) => nf.e.kind[i] === 1 && nf.e.owner[i] < 24 && nf.e.owner[i] !== c.id).every((i) => c.known.has(i)));
+ok('savaş sisi kapalı (eşit kural)', allKnown && nf.countries[0].visNow.every((v) => v === 1));
 console.log(fail ? `\n${fail} TEST BAŞARISIZ` : '\nTÜM TESTLER GEÇTİ');
 process.exit(fail ? 1 : 0);

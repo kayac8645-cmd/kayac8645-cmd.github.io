@@ -9,7 +9,7 @@ import { hash2, hash2f } from '../core/rng.js';
 import { rgba, withAlpha } from './gl.js';
 import { TerrainBaker } from './terrain.js';
 import { Particles, PT } from './particles.js';
-import { TILE, BUILD_TOP, DIRS } from './sprites.js';
+import { TILE, BUILD_TOP, DIRS, CITY_KINDS } from './sprites.js';
 import { VIS_CELL } from '../sim/country.js';
 import { LAUNCHERS } from '../sim/missiles.js';
 
@@ -19,7 +19,7 @@ const pcol = (k, a = 255) => { const c = PRGB[k]; return rgba(c[0], c[1], c[2], 
 const WHITE = 0xffffffff;
 export const LAYERS = ['normal', 'power', 'logistics', 'airdef', 'ew', 'resources', 'front'];
 const SYM = { inf: 'inf', armor: 'armor', mech: 'mech', artillery: 'arty', engineer: 'eng', ad_bat: 'ad', ew_bat: 'ew', mlrs: 'mlrs', sam_long: 'ad', sam_med: 'ad', sam_short: 'ad', corvette: 'ship' };
-const GEN_DIR = { 'gen:quad': 'quad', 'gen:fpv': 'fpv', 'gen:hexa': 'hexa', 'gen:delta': 'delta', 'gen:uav': 'uav', 'gen:male': 'male', 'gen:mother': 'mother' };
+const GEN_DIR = { 'gen:quad': 'quad', 'gen:fpv': 'fpv', 'gen:hexa': 'hexa', 'gen:delta': 'delta', 'gen:uav': 'uav', 'gen:male': 'male', 'gen:mother': 'mother', 'gen:jet': 'jet', 'gen:heli': 'heli', 'gen:boat': 'boat', 'gen:corvette': 'corvette' };
 
 export class View {
   constructor(renderer, atlas, sim, player) {
@@ -40,7 +40,7 @@ export class View {
   setQuality(q) { this.quality = q; this.parts.setCap([1500, 3000, 5000][q]); this.r.setLightScale([4, 2, 2][q]); }
   visibleTo(id) {
     const e = this.sim.e, p = this.player; const o = e.owner[id];
-    if (this.spectator || o === p) return true;
+    if (this.spectator || o === p || this.sim.opts.fog === false) return true;
     if (o < 24 && this.sim.diplo.allied(p, o)) return true;
     return ((e.seenBy[id] >>> p) & 1) === 1;
   }
@@ -81,7 +81,7 @@ export class View {
     }
   }
   visiblePoint(x, y) {
-    if (this.spectator) return true;
+    if (this.spectator || this.sim.opts.fog === false) return true;
     const co = this.sim.countries[this.player]; const cx = (x / VIS_CELL) | 0, cy = (y / VIS_CELL) | 0;
     if (cx < 0 || cy < 0 || cx >= co.vw || cy >= co.vh) return false;
     return co.visNow[cy * co.vw + cx] > 0;
@@ -96,12 +96,15 @@ export class View {
       const x = cx + dx, y = cy + dy; if (!map.inb(x, y) || !map.inb(x, y - 1)) continue;
       const d2 = dx * dx + dy * dy; if (d2 > R * R) continue;
       const i = y * map.W + x; if (!map.isLand(i) || map.road[i] || map.occ[i] || map.ter[i] === T.MOUNTAIN || map.ter[i] === T.PEAK) continue;
-      const hh = hash2(x, y, info.seed);
-      if ((hh & 255) / 255 > 0.5 - (d2 / (R * R + 1)) * 0.38) continue;
-      if (((x + y) & 1) && d2 > 4) continue; // sokak dokusu
+      const hh = hash2(x, y, info.seed); const ratio = d2 / (R * R + 1);
+      if ((hh & 255) / 255 > 0.5 - ratio * 0.3) continue;
+      if (((x + y) & 1) && ratio > 0.15) continue; // sokak dokusu: seyrek yerleşim
       if (map.occ[i - map.W]) continue;
-      const big = d2 < 4 && R > 4;
-      list.push([x, y, hh, big]);
+      const r2 = ((hh >>> 8) & 255) / 255; let kind;
+      if (ratio < 0.12 && R >= 4) kind = r2 < 0.45 ? 'office' : 'apartment';
+      else if (ratio < 0.35) kind = r2 < 0.5 ? 'apartment' : r2 < 0.75 ? 'shop' : 'rowhouse';
+      else kind = r2 < 0.68 ? 'house' : r2 < 0.8 ? 'rowhouse' : r2 < 0.87 ? 'shop' : r2 < 0.93 ? 'park' : r2 < 0.97 ? 'school' : 'gas';
+      list.push([x, y, hh, kind, (hh >>> 16) % CITY_KINDS[kind]]);
     }
     list.sort((a, b) => a[1] - b[1]);
     this.houses.set(id, { R, v: map.version >> 6, list });
@@ -150,7 +153,7 @@ export class View {
     for (const c of cities) {
       if (!this.spectator && e.owner[c] !== this.player && !this.sim.countries[this.player].known.has(c) && !this.visibleTo(c)) continue;
       const hp = e.hp[c] / e.maxhp[c];
-      for (const [hx, hy, hh, big] of this.cityHouses(c)) ground.push([(hy + 1) * TS, 2, c, hx, hy, hh, big, hp]);
+      for (const [hx, hy, hh, kind, v] of this.cityHouses(c)) ground.push([(hy + 1) * TS, 2, c, hx, hy, hh, kind, hp, v]);
     }
     ground.sort((a, b) => a[0] - b[0]);
     // 3) gölgeler
@@ -158,14 +161,6 @@ export class View {
     const shOn = dl > 0.15 && this.quality > 0;
     const sdx = (env.hour - 12.5) / 6 * 0.9, sdy = -0.45, slen = 0.35 + (1 - dl) * 0.5, sa = (0.32 * Math.min(1, dl * 2)) | 0;
     const shadowCol = rgba(0, 0, 0, Math.round(70 * Math.min(1, dl * 2)));
-    if (shOn) for (const g of ground) {
-      if (g[1] === 0) {
-        const i = g[2]; const bd = BUILDINGS[e.def[i]]; const v = e.flags[i] & F.RUINED ? 2 : e.hp[i] < e.maxhp[i] * 0.5 ? 1 : 0;
-        const f = A.get(`b:${bd.id}:${v}`); if (!f) continue;
-        const bx = e.ox[i] * TS, by = e.oy[i] * TS + bd.size[1] * TS; const hgt = f.h * slen;
-        r.quad4(this.tex, f.x, f.y, f.w, f.h, bx + sdx * hgt, by + sdy * hgt, bx + f.w + sdx * hgt, by + sdy * hgt, bx + f.w, by, bx, by, shadowCol);
-      }
-    }
     // 4) yer nesneleri
     let spr = 0;
     for (const g of ground) {
@@ -182,7 +177,7 @@ export class View {
     // 7) ışık haritası
     if (dl < 0.97 && this.quality >= 0) this.drawLights(ground, air, projs, dl);
     // 8) savaş sisi
-    if (!this.spectator) this.drawFog();
+    if (!this.spectator && this.sim.opts.fog !== false) this.drawFog();
     // 9) katmanlar ve arayüz öğeleri (dünya uzayı)
     this.drawLayer();
     this.drawSelection(alpha);
@@ -237,28 +232,18 @@ export class View {
     r.quad(this.tex, A.white.x, A.white.y, 1, 1, x, y, Math.max(1, w * p), 2, col);
   }
   drawHouse(g) {
-    const r = this.r, A = this.A; const [, , c, hx, hy, hh, big, hp] = g;
-    const e = this.sim.e; const x = hx * TS, y = hy * TS;
-    const ruined = (hh >>> 9 & 255) / 255 > hp + 0.05;
-    if (big) {
-      const f = A.get('kb:' + [8, 10, 9][hh % 3]);
-      r.quad(this.tex, f.x, f.y, 16, 16, x, y - 6, 16, 16, ruined ? rgba(90, 85, 80) : WHITE);
-      r.quad(this.tex, f.x, f.y, 16, 16, x, y - 16, 16, 12, ruined ? rgba(0, 0, 0, 0) : rgba(230, 232, 240));
-      return;
-    }
-    const wall = A.get('kt:' + (84 + (hh % 8))), roof = A.get('kt:' + ((hh >> 4) & 1 ? 63 : 67));
-    if (ruined) { const d = A.get('kb:5'); r.quad(this.tex, d.x, d.y, 16, 16, x, y, 16, 16, rgba(120, 110, 100)); return; }
-    r.quad(this.tex, wall.x, wall.y, 16, 16, x, y, 16, 16, WHITE);
-    r.quad(this.tex, roof.x, roof.y, 16, 16, x, y - 12, 16, 16, WHITE);
-    if (this.cam.zoom >= 3 && ((hh >> 6) & 7) === 0 && e.owner[c] < 24) r.quad(this.tex, A.white.x, A.white.y, 1, 1, x + 12, y - 9, 2, 2, teamCol(e.owner[c]));
+    const r = this.r, A = this.A; const [, , , hx, hy, hh, kind, hp, v] = g;
+    const ruined = ((hh >>> 9) & 255) / 255 > hp + 0.05;
+    const f = A.get(`c:${kind}:${v}:${ruined ? 2 : 0}`); if (!f) return;
+    r.quad(this.tex, f.x, f.y, f.w, f.h, hx * TS + ((TS - f.w) >> 1), (hy + 1) * TS - f.h, f.w, f.h, WHITE);
   }
   drawGroundUnit(i, px, py, shOn) {
     const e = this.sim.e, r = this.r, A = this.A, u = UNITS[e.def[i]], o = e.owner[i];
     const z = this.cam.zoom; const kind = e.kind[i];
     if (kind === KIND.CONVOY) {
-      const f = A.get('kb:' + (e.state[i] >= 1 ? 96 : 95)); const flip = e.vx[i] < 0;
-      if (shOn) r.quad(this.tex, f.x, f.y, 16, 16, px - 6, py - 4, 12, 12, rgba(0, 0, 0, 60), flip);
-      r.quad(this.tex, f.x, f.y, 16, 16, px - 7, py - 10, 14, 14, teamCol(o), flip);
+      const nm = e.state[i] >= 1 ? 'v:truck_supply' : 'v:truck'; const f = A.get(nm), m = A.get(nm + ':m'); const flip = e.vx[i] < 0;
+      r.quad(this.tex, f.x, f.y, f.w, f.h, px - f.w / 2, py - f.h + 3, f.w, f.h, WHITE, flip);
+      if (m) r.quad(this.tex, m.x, m.y, m.w, m.h, px - f.w / 2, py - f.h + 3, f.w, f.h, teamCol(o), flip);
       if (e.state[i] === 2 && z >= 2) this.icon('!', px + 5, py - 12, pcol('g5'));
       return;
     }
@@ -268,17 +253,16 @@ export class View {
       r.quad(this.tex, f.x, f.y, f.w, f.h, px - 6, py - 5, f.w, f.h, teamCol(o));
       return;
     }
-    let name = u.spr; const flip = e.vx[i] < -0.01;
-    let f = A.get(name), m = A.get(name + ':m');
-    if (!f) { f = A.get('kb:106'); m = null; }
-    const w = (u.sz || 1) * 16;
-    if (shOn) r.quad(this.tex, f.x, f.y, f.w, f.h, px - w / 2 + 2, py - w + 6, w, w - 2, rgba(0, 0, 0, 55), flip);
-    if (name.startsWith('kb:')) r.quad(this.tex, f.x, f.y, f.w, f.h, px - w / 2, py - w + 3, w, w, teamCol(o), flip);
-    else { r.quad(this.tex, f.x, f.y, f.w, f.h, px - w / 2, py - w + 3, w, w, WHITE, flip); if (m) r.quad(this.tex, m.x, m.y, m.w, m.h, px - w / 2, py - w + 3, w, w, teamCol(o), flip); }
+    let name = u.spr, flip = e.vx[i] < -0.01;
+    if (GEN_DIR[name]) { name = `${name}:${((Math.round(Math.atan2(e.vy[i], e.vx[i]) / (Math.PI * 2) * DIRS) % DIRS) + DIRS) % DIRS}`; flip = false; }
+    const f = A.get(name), m = A.get(name + ':m'); if (!f) return;
+    const w = f.w, hh = f.h, oy = GEN_DIR[u.spr] ? hh / 2 : hh - 3;
+    r.quad(this.tex, f.x, f.y, f.w, f.h, px - w / 2, py - oy, w, hh, WHITE, flip);
+    if (m) r.quad(this.tex, m.x, m.y, m.w, m.h, px - w / 2, py - oy, w, hh, teamCol(o), flip);
     // tahkimat: kum torbası halkası
     if (e.entrench[i] > 0.3 && kind === KIND.GROUND) { const n = Math.round(e.entrench[i] * 6); for (let k = 0; k < n; k++) r.quad(this.tex, A.white.x, A.white.y, 1, 1, px - 7 + k * 2.4, py + 2, 2, 1, pcol('b4')); }
-    if (z >= 2 && e.hp[i] < e.maxhp[i]) this.bar(px - 6, py - w + 1, 12, e.hp[i] / e.maxhp[i], pcol('g4'));
-    if (z >= 3 && e.owner[i] === this.player && e.supply[i] < 0.3) this.icon('!', px + 6, py - w + 2, pcol('o1'));
+    if (z >= 2 && e.hp[i] < e.maxhp[i]) this.bar(px - 6, py - oy - 3, 12, e.hp[i] / e.maxhp[i], pcol('g4'));
+    if (z >= 3 && e.owner[i] === this.player && e.supply[i] < 0.3) this.icon('!', px + w / 2, py - oy, pcol('o1'));
     // sahiplik şekli (renk körü için): düşmanda kırmızı eşkenar dörtgen köşe
     if (o !== this.player && this.sim.atWar(this.player, o) && z >= 2) { r.quad(this.tex, A.white.x, A.white.y, 1, 1, px - 1, py + 3, 2, 2, pcol('e2')); }
   }
@@ -390,10 +374,10 @@ export class View {
         for (const [lx, ly, k] of f.meta.lights) L(bx + lx, by + ly, k === 3 ? 14 : k === 2 ? 7 : 5, k === 2 ? (bd.id === 'airbase' ? blue : red) : k === 3 ? rgba(255, 140, 50, 220) : win);
       } else if (g[1] === 2) {
         const c = g[2]; if (!(e.flags[c] & F.POWERED)) continue; // elektriksiz şehir karanlık
-        const [, , , hx, hy, hh, big] = g; const x = hx * TS + 8, y = hy * TS + 8;
-        if (big) { L(x, y - 6, 14, win); continue; }
-        if ((hh & 3) !== 0) L(x, y + 2, 7, win);
-        if ((hh & 15) === 5) L(x + 8, y + 8, 16, lamp);
+        const [, , , hx, hy, hh, kind, , v] = g; const f = A.get(`c:${kind}:${v}:0`); if (!f) continue;
+        const ox = hx * TS + ((TS - f.w) >> 1), oy = (hy + 1) * TS - f.h;
+        for (let k = 0; k < f.lights.length; k += 2) { const [lx, ly] = f.lights[k]; L(ox + lx, oy + ly, 5, win); }
+        if ((hh & 15) === 5) L(hx * TS + 15, hy * TS + 15, 16, lamp);
       }
     }
     for (const [i, px, py] of projs) { const zz = e.z[i] * 2; L(px, py - zz, 10, rgba(255, 170, 80, 220)); }

@@ -30,7 +30,7 @@ export const MAX_COUNTRIES = 24;
 
 export class Simulation {
   constructor(opts) {
-    this.opts = Object.assign({ seed: 1, size: 256, countries: 4, difficulty: 1, player: 0, allAI: false }, opts);
+    this.opts = Object.assign({ seed: 1, size: 256, countries: 4, difficulty: 1, player: 0, allAI: false, fog: true }, opts);
     const o = this.opts;
     this.tick = 0;
     this.rng = new RNG(o.seed ^ 0xa5a5a5);

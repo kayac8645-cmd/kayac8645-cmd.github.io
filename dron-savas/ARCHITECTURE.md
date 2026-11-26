@@ -9,7 +9,7 @@
 |---|---|---|
 | Motor | Kendi ECS + WebGL2 batch, harici çalışma zamanı kütüphanesi yok | Simülasyon/render ayrımı, determinizm, küçük paket boyutu |
 | Paketleme | HTML yerine APK (kullanıcı isteği) | WebView kabuğu en hızlı ve güvenilir yol; kod tabanı aynı kalır |
-| Sanat | Hibrit: Kenney "Tiny Battle/Town" (CC0, 16 px) + prosedürel üreteç | Birimler, ağaçlar ve evler Kenney'den; arazi, dron, füze ve özel binalar (radar, santral, rafineri…) koddan. Hepsi 16 px karo ve koyu dış hat stilinde |
+| Sanat | Tamamen prosedürel (0.16'dan itibaren harici görsel yok) | `render/art.js`: ışık/gölge rampaları (gölgede maviye, ışıkta sarıya kayma), renkli dış hat, pişmiş yarı saydam gölge. Palet 64 temel renk + rampa türevleri. Kullanıcı onaylı görsel kimlik |
 | Font | Pixelify Sans (OFL), npm `@fontsource`, woff2 gömülü | Türkçe karakter desteği, piksel stil |
 | Zaman ölçeği | 1 tick = 1 oyun dakikası, 10 tick/sn (1x). 1 gün = 144 sn, mevsim = 10 gün | Gün–gece döngüsü gözle görülür |
 | Ölçek | Menziller karo cinsinden (1 karo ≈ 250 m kurgusal) | Okunur oynanış |
@@ -20,6 +20,7 @@
 | Zafer | Başkent düşerse ülke ilhak edilir; teslimiyet puanı (toprak kaybı, moral, enerji, ordu) 0,7'yi aşarsa teslim olur. Sonda yalnız müttefikler kaldığında ittifaklar dağılır | "Tek kazanan" kuralı |
 | Hava savunma ağı | SAM'in kendi radarı kısa menzillidir. Tam menzil için ağa bağlı (haberleşme) bir radar izi gerekir | "Radar ağı olmadan SAM'ler kör" ilkesi |
 | EH | 6 bant; jammer en fazla 2 bandı (uyarlanır karıştırma tekniğiyle 3) karıştırır ve gözlemlediği banda yaklaşık 160 tick'te uyum sağlar. Fiber dron bağışıktır | Frekans uyum yarışı |
+| Sis seçeneği | `opts.fog=false` iken tüm ülkelerin görüşü tam (YZ dahil); hava hedeflerinin radar algılaması değişmez | Kullanıcı isteği, eşit kural |
 | Savaş sisi | Ülke başına 4×4 karolık hücre ızgarası (son görülme). Kendi toprağı her zaman görünür. İstihbarat belleği `known` haritasında tutulur | YZ hile yapmaz, aynı sise tabidir |
 | Trig | Simülasyonda sin/cos/atan2 yok; yalnız + − × ÷ ve √ | IEEE-754'te motorlar arası deterministik (lockstep) |
 

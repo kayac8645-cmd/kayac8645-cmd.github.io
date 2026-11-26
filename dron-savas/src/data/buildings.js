@@ -17,7 +17,7 @@ export const BUILDINGS = [
   { id: 'missile_fac', size: [3, 3], hp: 520, cost: m(2200, 60, 30), time: 700, power: -30, workers: 260, caps: ['factory'], items: ['sam_s', 'sam_m', 'sam_l', 'agm', 'guided_rocket', 'cruise', 'arm', 'antiship', 'ballistic', 'fighter', 'heli'], look: 'missile_fac', cat: 'mil' },
   { id: 'barracks', size: [2, 2], hp: 400, cost: m(500, 10), time: 220, power: -6, workers: 80, caps: ['factory'], units: ['inf', 'engineer'], look: 'barracks', cat: 'mil' },
   { id: 'vehicle_fac', size: [3, 2], hp: 480, cost: m(1400, 40, 10), time: 520, power: -24, workers: 220, caps: ['factory'], units: ['mech', 'artillery', 'mlrs', 'ad_bat', 'sam_short', 'armor', 'ew_bat', 'sam_med', 'sam_long'], look: 'vehicle_fac', cat: 'mil' },
-  { id: 'research', size: [2, 2], hp: 300, cost: m(900, 10, 10), time: 360, power: -20, workers: 120, caps: ['research'], rate: 1, look: 'research', cat: 'eco' },
+  { id: 'research', size: [2, 2], hp: 300, cost: m(900, 10, 10), time: 360, power: -20, workers: 120, caps: ['research'], rate: 1, look: 'research', cat: 'city' },
   // Enerji
   { id: 'coal_plant', size: [3, 3], hp: 600, cost: m(1100, 40), time: 500, power: 120, fuelRes: 'coal', burn: 0.03, workers: 150, caps: ['power'], look: 'coal_plant', cat: 'pow' },
   { id: 'gas_plant', size: [2, 2], hp: 420, cost: m(900, 25), time: 380, power: 90, fuelRes: 'gas', burn: 0.025, workers: 90, caps: ['power'], look: 'gas_plant', cat: 'pow' },
@@ -25,7 +25,7 @@ export const BUILDINGS = [
   { id: 'nuclear', size: [3, 3], hp: 1100, cost: m(4000, 120, 40), time: 1400, power: 360, fuelRes: 'uranium', burn: 0.003, workers: 260, caps: ['power'], look: 'nuclear', cat: 'pow', tech: 'p_nuclear' },
   { id: 'solar', size: [2, 2], hp: 160, cost: m(600, 6, 8), time: 200, power: 35, solar: true, workers: 10, caps: ['power'], look: 'solar', cat: 'pow', tech: 'p_solar' },
   { id: 'substation', size: [1, 1], hp: 180, cost: m(180, 6), time: 90, power: 0, workers: 5, caps: ['power', 'sub'], look: 'substation', cat: 'pow' },
-  { id: 'pump', size: [1, 1], hp: 160, cost: m(220, 6), time: 100, power: -6, workers: 15, place: 'nearwater', caps: ['water'], look: 'pump', cat: 'pow' },
+  { id: 'pump', size: [1, 1], hp: 160, cost: m(220, 6), time: 100, power: -6, workers: 15, place: 'nearwater', caps: ['water'], look: 'pump', cat: 'city' },
   // Haberleşme
   { id: 'relay', size: [1, 1], hp: 120, cost: m(260, 8, 4), time: 120, power: -3, workers: 5, caps: ['comms', 'control'], comms: 20, control: 18, look: 'relay', cat: 'mil' },
   { id: 'satellite', size: [2, 2], hp: 300, cost: m(2400, 20, 30), time: 800, power: -25, workers: 60, caps: ['comms', 'emit'], comms: 70, look: 'satellite', cat: 'mil', tech: 'e_sat' },
@@ -42,11 +42,11 @@ export const BUILDINGS = [
   { id: 'laser', size: [2, 2], hp: 220, cost: m(2600, 20, 40), time: 800, power: -70, workers: 20, caps: ['ad'], ad: 'laser', look: 'laser', cat: 'def', tech: 'a_laser' },
   { id: 'jammer', size: [1, 1], hp: 160, cost: m(800, 6, 16), time: 260, power: -16, workers: 15, caps: ['jammer', 'emit'], jam: 18, gps: true, look: 'jammer', cat: 'def', tech: 'e_jam' },
   { id: 'sigint', size: [2, 2], hp: 220, cost: m(1100, 8, 20), time: 360, power: -14, workers: 40, caps: ['sigint'], sigint: 75, look: 'sigint', cat: 'def', tech: 'e_sigint' },
-  { id: 'bunker', size: [1, 1], hp: 500, cost: m(300, 20), time: 160, power: 0, workers: 0, caps: ['vision'], vision: 5, look: 'bunker', cat: 'def', fort: true },
+  { id: 'bunker', size: [1, 1], hp: 500, cost: m(300, 20), time: 160, power: 0, workers: 0, caps: ['vision'], vision: 5, look: 'bunker', cat: 'city', fort: true, shelter: true },
   // Ulaşım (otomatik/özel)
   { id: 'bridge', size: [1, 1], hp: 260, cost: m(0), time: 1, power: 0, workers: 0, look: 'bridge', cat: 'none' },
 ];
 export const B = Object.fromEntries(BUILDINGS.map((b, i) => [b.id, i]));
-export const BUILD_CATS = ['eco', 'pow', 'mil', 'def', 'log'];
+export const BUILD_CATS = ['eco', 'pow', 'mil', 'def', 'log', 'city'];
 // Gömülü/dağınık kurulum çarpanları
 export const HARDEN = { cost: 1.8, time: 1.6, dmg: 0.4 };

@@ -38,7 +38,9 @@ export function explode(sim, x, y, r, dmg, owner, opts = {}) {
     const dx = e.x[i] - x, dy = e.y[i] - y; const rr = e.prog[i] + r;
     if (dx * dx + dy * dy > rr * rr) return;
     e.hp[i] = Math.max(e.maxhp[i] * 0.2, e.hp[i] - dmg * 0.15);
-    e.fuel[i] += 1 + dmg / 100; // bombardıman hafızası
+    let shelter = false; // sığınak: halkın moral kaybını yarıya indirir
+    sim.grid.query(e.x[i], e.y[i], 10, (j) => { if (e.kind[j] === KIND.BUILDING && e.owner[j] === e.owner[i] && BUILDINGS[e.def[j]].shelter && !(e.flags[j] & (F.RUINED | F.BUILDING))) { shelter = true; return true; } });
+    e.fuel[i] += (1 + dmg / 100) * (shelter ? 0.5 : 1); // bombardıman hafızası
     e.buf[i] = Math.max(200, e.buf[i] - dmg * 0.5); // yerinden edilen nüfus
   });
 }

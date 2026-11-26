@@ -69,8 +69,9 @@ export function updateVisibility(sim) {
   const e = sim.e, map = sim.map, nC = sim.countries.length; const tq = ((sim.tick / 10) | 0) + 1;
   for (let c = 0; c < nC; c++) {
     const co = sim.countries[c]; if (!co.alive) continue;
-    const vn = co.visNow; vn.fill(0);
-    const vw = co.vw, vh = co.vh;
+    const vn = co.visNow; const vw = co.vw, vh = co.vh;
+    if (sim.opts.fog === false) { vn.fill(1); co.vis.fill(tq); continue; } // sis kapalı: herkes her şeyi görür (YZ dahil)
+    vn.fill(0);
     // kendi toprakları (halk istihbaratı)
     for (let cy = 0; cy < vh; cy++) for (let cx = 0; cx < vw; cx++) {
       const x = Math.min(map.W - 1, cx * VIS_CELL + 2), y = Math.min(map.H - 1, cy * VIS_CELL + 2);
@@ -163,6 +164,11 @@ export function updateSigint(sim) {
   for (const co of sim.countries) for (const [id, v] of co.emitters) if (sim.tick - v.t > 600 || !e.alive(id)) co.emitters.delete(id);
 }
 
+// oyun kuralı: savaş sisi aç/kapat (yalnız insan oyuncu)
+registerCommand(CMD.RULE, (sim, cmd) => {
+  if (sim.countries[cmd.c].ai) return false;
+  if (cmd.fog !== undefined) { sim.opts.fog = !!cmd.fog; sim.notify(cmd.c, cmd.fog ? 'n_fog_on' : 'n_fog_off', [], -1, -1, 1); }
+});
 registerCommand(CMD.SET_BAND, (sim, cmd) => {
   const co = sim.countries[cmd.c]; const b = cmd.band | 0;
   if (!((co.bands >>> b) & 1)) return false;

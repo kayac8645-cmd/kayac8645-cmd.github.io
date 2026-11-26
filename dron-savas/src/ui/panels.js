@@ -32,19 +32,32 @@ export class Panels {
 
   // ---------- İNŞA ----------
   p_build() {
-    const g = this.g, sim = g.sim, co = this.co(); const cat = this.state.cat || 'eco';
-    const tabs = h('div', { class: 'tabs' }, BUILD_CATS.map((c) => btn(t('cat_' + c), () => { this.state.cat = c; this.render(); }, c === cat ? 'on' : '')));
-    const hard = !!this.state.hard;
-    const grid = h('div', { class: 'grid' });
+    const g = this.g, sim = g.sim, co = this.co(); const cat = this.state.cat || 'eco'; const hard = !!this.state.hard;
+    const tabs = h('div', { class: 'tabs scroll' }, BUILD_CATS.map((c) => btn(t('cat_' + c), () => { this.state.cat = c; this.render(); }, c === cat ? 'on' : '')));
+    const mul = hard ? HARDEN.cost : 1;
+    const costRow = (cost) => h('div', { class: 'costrow' }, Object.entries(cost).filter(([, v]) => v > 0).map(([k, v]) => {
+      const have = k === 'money' ? co.money : co.res[R[k]]; const need = v * mul;
+      return h('span', { class: 'cost' + (have < need ? ' miss' : '') }, this.hud.icon('res:' + k, null, 1), fmt(need));
+    }));
+    const grid = h('div', { class: 'grid bgrid' });
     BUILDINGS.forEach((bd, i) => {
       if (bd.cat !== cat) return;
-      const locked = !sim.techOk(g.player, bd.tech); const afford = sim.canAfford(g.player, bd.cost, hard ? HARDEN.cost : 1);
-      grid.append(h('div', { class: 'card' + (locked ? ' locked' : afford ? '' : ' poor'), onclick: () => { if (locked) return; this.close(); g.setMode('build', { def: i, hard }); g.view.ghost = null; } },
-        this.hud.icon(`b:${bd.id}:0`, PAL[TEAM[g.player]], 1), h('div', { class: 'cname' }, t('b_' + bd.id)),
-        h('div', { class: 'ccost' }, locked ? '🔒 ' + t('t_' + bd.tech) : costStr(bd.cost, hard ? HARDEN.cost : 1)),
-        h('div', { class: 'cinfo' }, (bd.power > 0 ? `+${bd.power}MW ` : bd.power < 0 ? `${bd.power}MW ` : '') + (bd.workers ? `👷${bd.workers}` : ''))));
+      const locked = !sim.techOk(g.player, bd.tech); const afford = sim.canAfford(g.player, bd.cost, mul);
+      let lp = null;
+      const card = h('div', { class: 'card bcard' + (locked ? ' locked' : afford ? '' : ' poor'),
+        onpointerdown: () => { lp = setTimeout(() => { lp = 'shown'; this.hud.toast(t('b_' + bd.id) + ': ' + t('desc_' + bd.id), -1, -1, 0, 6000); }, 450); },
+        onpointerup: () => { if (lp === 'shown') { lp = null; return; } clearTimeout(lp); lp = null; if (locked) { this.hud.toast(t('err_tech') + ': ' + t('t_' + bd.tech), -1, -1, 1); return; } this.close(); g.startBuild(i, hard); },
+        onpointerleave: () => { if (lp && lp !== 'shown') clearTimeout(lp); } },
+        h('div', { class: 'bimg' }, this.hud.icon(`b:${bd.id}:0`, PAL[TEAM[g.player]], 2)),
+        h('div', { class: 'cname' }, t('b_' + bd.id)),
+        locked ? h('div', { class: 'ccost lock' }, '🔒 ' + t('t_' + bd.tech)) : costRow(bd.cost),
+        h('div', { class: 'cinfo' }, bd.power > 0 ? h('span', { class: 'okc' }, this.hud.icon('res:power', null, 1), '+' + bd.power) : bd.power < 0 ? h('span', {}, this.hud.icon('res:power', null, 1), bd.power) : '',
+          bd.workers ? h('span', {}, this.hud.icon('res:pop', null, 1), bd.workers) : ''));
+      grid.append(card);
     });
-    this.frame(t('p_build'), tabs, h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: hard, onchange: (e) => { this.state.hard = e.target.checked; this.render(); } }), t('hardened')), grid);
+    this.frame(t('p_build'), tabs,
+      h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: hard, onchange: (e) => { this.state.hard = e.target.checked; this.render(); } }), t('hardened')),
+      h('p', { class: 'small' }, t('build_hint')), grid);
   }
 
   // ---------- ÜRETİM (genel) ----------
@@ -178,6 +191,7 @@ export class Panels {
       h('h3', {}, t('m_settings')),
       h('div', { class: 'row' }, t('s_quality') + ':', ['q_low', 'q_med', 'q_high'].map((q, k) => btn(t(q), () => set('quality', k), s.quality === k ? 'on' : ''))),
       h('div', { class: 'row' }, t('s_sound') + ':', btn(s.sound ? t('s_on') : t('s_off'), () => set('sound', !s.sound)), [0.3, 0.6, 1].map((v) => btn(String(v * 100 | 0) + '%', () => set('volume', v), s.volume === v ? 'on' : ''))),
+      g.spectator ? '' : h('div', { class: 'row' }, t('s_fog') + ':', btn(g.sim.opts.fog !== false ? t('s_on') : t('s_off'), () => { g.issue({ type: CMD.RULE, fog: g.sim.opts.fog === false }); setTimeout(() => this.render(), 200); })),
       h('div', { class: 'row' }, t('s_vibrate') + ':', btn(s.vibrate ? t('s_on') : t('s_off'), () => set('vibrate', !s.vibrate)), ' FPS:', btn(s.debug ? t('s_on') : t('s_off'), () => set('debug', !s.debug))),
       h('div', { class: 'row small' }, `${t('s_renderer')}: ${app.renderer.kind}`),
       h('div', { class: 'acts' }, btn('⌂ ' + t('m_back'), () => { if (!g.spectator) g.autosave(); app.toMenu(); }, 'warn')));

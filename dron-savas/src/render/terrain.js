@@ -46,7 +46,6 @@ function makePatterns(season) {
   return P;
 }
 
-const RES_COL = [0, 'f1', 'k0', 'k1', 'n0', 'o0', 'l0', 'u2'];
 
 export class TerrainBaker {
   constructor(renderer, atlas, map) {
@@ -54,10 +53,7 @@ export class TerrainBaker {
     this.cache = new Map(); this.max = 96; this.season = -1; this.patterns = null;
     this.buf = new Uint32Array(CPX * CPX); this.img = new ImageData(new Uint8ClampedArray(this.buf.buffer), CPX, CPX);
     this.frame = 0; this.warFn = () => false;
-    // Kenney town ağaç pikselleri
-    const tc = document.createElement('canvas'); tc.width = atlas.kenney.town.width; tc.height = atlas.kenney.town.height;
-    const tx = tc.getContext('2d'); tx.drawImage(atlas.kenney.town, 0, 0); const id = tx.getImageData(0, 0, tc.width, tc.height);
-    this.town = new Uint32Array(id.data.buffer); this.townW = tc.width;
+    this.trees = atlas.trees; this.deposits = atlas.deposits; // prosedürel ağaç ve yatak çizimleri
   }
   setSeason(s) { if (s !== this.season) { this.season = s; this.patterns = makePatterns(s); this.invalidateAll(); } }
   invalidateAll() { for (const v of this.cache.values()) v.dirty = true; }
@@ -151,7 +147,7 @@ export class TerrainBaker {
       }
       if (t === T.RIVER) this.drawRiver(gx, gy, ox, oy);
       if (map.flood[i]) for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) if (((x + y) & 1) || hash2f(x, y, i) < 0.6) buf[(oy + y) * CPX + ox + x] = (x + y) % 5 ? P32.w3 : P32.w4;
-      if (map.res[i] && map.isLand(i)) { const c = P32[RES_COL[map.res[i]]]; for (let k = 0; k < 6; k++) { const h = hash2(gx, gy, k + 50); const x = h % 15, y = (h >> 8) % 15; buf[(oy + y) * CPX + ox + x] = c; buf[(oy + y) * CPX + ox + x + 1] = c; } }
+      if (map.res[i] && map.isLand(i) && !map.occ[i] && !map.road[i]) { const h = hash2(gx, gy, 50); this.blit(this.deposits[map.res[i]][h % 3], ox + 2 + (h >> 4) % 3, oy + 3 + (h >> 8) % 3); }
     }
     // 4) kraterler / yanık izleri
     const x0 = tx0 - 3, y0 = ty0 - 3, x1 = tx0 + CH + 3, y1 = ty0 + CH + 3;
@@ -181,11 +177,10 @@ export class TerrainBaker {
       if (map.road[i] || map.occ[i]) continue;
       const h = hash2(gx, gy, 123);
       if (t === T.FOREST || (t === T.GRASS && (h & 63) < 2) || (t === T.HILL && (h & 31) < 3) || (t === T.SWAMP && (h & 15) < 3)) {
-        const kinds = season === 2 ? [15, 27, 3, 28] : season === 3 ? [28, 4, 28, 4] : [16, 28, 5, 4];
-        const fr = kinds[(h >> 8) & 3];
-        const ox = tx * TS + ((h >> 12) % 5) - 2, oy = ty * TS + ((h >> 16) % 5) - 4;
-        this.blitTown(fr, ox, oy, season === 3);
-        if (t === T.FOREST && ((h >> 20) & 1)) this.blitTown(kinds[(h >> 22) & 3], ox + 7, oy + 5, season === 3);
+        const T_ = this.trees[season]; const pick = (k) => { const q = k & 7; return q < 4 ? T_.round[q % 3] : q < 7 ? T_.pine[q & 1] : T_.bush[q & 1]; };
+        const ox = tx * TS + ((h >> 12) % 5) - 1, oy = ty * TS + ((h >> 16) % 5) - 4;
+        this.blit(pick(h >> 8), ox, oy);
+        if (t === T.FOREST && ((h >> 20) & 1)) this.blit(pick(h >> 22), ox + 6, oy + 6);
       } else if ((t === T.MOUNTAIN || t === T.PEAK) && (h & 3) === 0) this.drawPeak(tx * TS + 2, ty * TS + 12, t === T.PEAK || season === 3, h);
     }
     // 7) sınırlar ve cephe hattı
@@ -210,14 +205,14 @@ export class TerrainBaker {
       }
     }
   }
-  blitTown(fr, ox, oy, snow) {
-    const sx = (fr % 12) * 16, sy = ((fr / 12) | 0) * 16, buf = this.buf;
-    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
-      const v = this.town[(sy + y) * this.townW + sx + x]; if ((v >>> 24) < 128) continue;
-      const X = ox + x, Y = oy + y; if (X < 0 || Y < 0 || X >= CPX || Y >= CPX) continue;
-      let c = v;
-      if (snow && y < 9 && ((x + y) & 1)) c = P32.n2;
-      buf[Y * CPX + X] = c;
+  // Art sprite'ını chunk tamponuna kopyala (yarı saydam gölge pikselleri karartma olarak uygulanır)
+  blit(art, ox, oy) {
+    const buf = this.buf, d = art.d, w = art.w;
+    for (let y = 0; y < art.h; y++) for (let x = 0; x < w; x++) {
+      const v = d[y * w + x]; if (!v) continue; const X = ox + x, Y = oy + y; if (X < 0 || Y < 0 || X >= CPX || Y >= CPX) continue;
+      const a = v >>> 24, k = Y * CPX + X;
+      if (a >= 250) buf[k] = v;
+      else { const c = buf[k], f = 1 - a / 255 * 0.6; buf[k] = (0xff000000 | ((((c >> 16) & 255) * f) << 16) | ((((c >> 8) & 255) * f) << 8) | ((c & 255) * f)) >>> 0; }
     }
   }
   drawPeak(ox, oy, snow, h) {

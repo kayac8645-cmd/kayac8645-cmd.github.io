@@ -1,4 +1,4 @@
-// HUD: üst şerit (kaynaklar, elektrik, tarih, hız), alt bağlam menüsü, bildirimler, mini harita, şehir etiketleri
+// HUD: üst şerit (ikonlu kaynak şeridi, elektrik, tarih, hız), alt bağlam menüsü, bildirimler, şehir ve maden yatağı etiketleri
 import { KIND, C, F } from '../core/ecs.js';
 import { CMD } from '../core/commands.js';
 import { BUILDINGS } from '../data/buildings.js';
@@ -11,6 +11,8 @@ import { LAUNCHERS } from '../sim/missiles.js';
 import { LAYERS } from '../render/view.js';
 import { frameIcon } from '../render/sprites.js';
 import { VIS_CELL } from '../sim/country.js';
+import { depositWorked } from '../world/deposits.js';
+import { B } from '../data/buildings.js';
 import { h, clear, fmt, btn, flagCanvas } from './dom.js';
 import { Panels } from './panels.js';
 import { t } from '../i18n/i18n.js';
@@ -23,38 +25,50 @@ export class HUD {
     this.icons = new Map();
     this.top = h('div', { class: 'topbar' }); this.bottom = h('div', { class: 'bottombar' });
     this.toasts = h('div', { class: 'toasts' }); this.banner = h('div', { class: 'banner hidden' });
-    this.labels = h('div', { class: 'labels' }); this.mini = h('canvas', { class: 'minimap', width: 128, height: 128 });
+    this.labels = h('div', { class: 'labels' });
     this.side = h('div', { class: 'sidebtns' });
     this.panelEl = h('div', { class: 'panel hidden' });
     this.debug = h('div', { class: 'debug' });
-    root.append(this.labels, this.top, this.toasts, this.banner, this.mini, this.side, this.bottom, this.panelEl, this.debug);
+    root.append(this.labels, this.top, this.toasts, this.banner, this.side, this.bottom, this.panelEl, this.debug);
     this.panels = new Panels(this);
-    this.mini.addEventListener('pointerdown', (e) => { const r = this.mini.getBoundingClientRect(); const m = game.sim.map; game.jumpTo((e.clientX - r.left) / r.width * m.W, (e.clientY - r.top) / r.height * m.H); e.stopPropagation(); });
+    this.tAcc = 0; this.miniAcc = 0; this.labelPool = []; this.depPool = []; this.resHist = []; this.chips = {};
     this.buildTop(); this.buildSide(); this.renderContext();
-    this.tAcc = 0; this.miniAcc = 0; this.labelPool = [];
     this.toast(t('tut_1'), -1, -1, 0, 6000);
     if (!game.spectator) setTimeout(() => this.toast(t('tut_2'), -1, -1, 0, 7000), 2500);
   }
   destroy() { clear(this.root); }
+  iconSrc(name, tint, scale = 2) { const k = name + '|' + tint + '|' + scale; let v = this.icons.get(k); if (!v) { v = frameIcon(this.g.app.atlas, name, scale, tint); this.icons.set(k, v); } return v; }
   icon(name, tint, scale = 2) { const k = name + '|' + tint + '|' + scale; let v = this.icons.get(k); if (!v) { v = frameIcon(this.g.app.atlas, name, scale, tint); this.icons.set(k, v); } return h('img', { class: 'ico', src: v, alt: '' }); }
 
   // ---------- üst şerit ----------
   buildTop() {
     const g = this.g; const T_ = this.top;
-    this.tMoney = h('span'); this.tPower = h('span'); this.tPop = h('span'); this.tRes = h('span', { class: 'res' }); this.tDate = h('span', { class: 'date' });
+    this.tMoney = h('b'); this.tPower = h('b'); this.tPop = h('b'); this.tDate = h('span', { class: 'date' });
+    const stat = (ico, el, cls, tip) => h('span', { class: 'stat ' + cls, onclick: () => this.toast(tip(), -1, -1, 0, 3000) }, this.icon('res:' + ico, null, 2), el);
+    this.sPower = stat('power', this.tPower, 'power', () => `${t('r_power')}: ${g.sim.countries[g.player].power.supply | 0} / ${g.sim.countries[g.player].power.demand | 0} MW`);
     this.spBtns = [0, 1, 2, 4].map((s) => btn(s === 0 ? '❚❚' : s + 'x', () => { if (s === 0) g.paused = !g.paused; else { g.speed = s; g.paused = false; } this.updateTop(); }, 'sp'));
-    T_.append(h('div', { class: 'row' }, h('span', { class: 'stat money' }, '¤ ', this.tMoney), h('span', { class: 'stat power' }, '⚡ ', this.tPower), h('span', { class: 'stat pop' }, '☺ ', this.tPop), this.tDate),
-      h('div', { class: 'row' }, this.tRes, h('div', { class: 'speed' }, this.spBtns)));
+    this.strip = h('div', { class: 'resstrip' });
+    for (const r of ['steel', 'fuel', 'electronics', 'supply', 'explosives', 'composite', 'iron', 'coal', 'copper', 'oil', 'gas', 'rare', 'uranium']) {
+      const n = h('b'); const chip = h('span', { class: 'chip', onclick: () => this.resInfo(r) }, this.icon('res:' + r, null, 2), n);
+      this.chips[r] = n; this.strip.append(chip);
+    }
+    T_.append(h('div', { class: 'row' }, stat('money', this.tMoney, 'money', () => `${t('r_money')}: ${fmt(g.sim.countries[g.player].money)} · +${((g.sim.countries[g.player].incomeLast || 0) * 60) | 0}/saat`), this.sPower,
+      stat('pop', this.tPop, 'pop', () => `${t('r_pop')}: ${fmt(g.sim.countries[g.player].pop)} · ${t('r_morale')}: ${(g.sim.countries[g.player].morale * 100) | 0}%`), this.tDate),
+      h('div', { class: 'row' }, this.strip, h('div', { class: 'speed' }, this.spBtns)));
+  }
+  resInfo(r) {
+    const co = this.g.sim.countries[this.g.player]; const H = this.resHist; let rate = 0;
+    if (H.length >= 2) { const a = H[0], b = H[H.length - 1]; rate = (b.v[R[r]] - a.v[R[r]]) / Math.max(1, (b.t - a.t) / 60); }
+    this.toast(`${t('r_' + r)}: ${fmt(co.res[R[r]])} · ${rate >= 0 ? '+' : ''}${rate.toFixed(1)}/saat`, -1, -1, 0, 3500);
   }
   updateTop() {
     const g = this.g, sim = g.sim, co = sim.countries[g.player], env = sim.env;
     this.tMoney.textContent = fmt(co.money);
-    const ps = co.power.supply | 0, pd = co.power.demand | 0; this.tPower.textContent = `${ps}/${pd} MW`;
-    this.tPower.parentElement.className = 'stat power ' + (ps >= pd ? 'ok' : ps >= pd * 0.6 ? 'warn' : 'bad');
-    this.tPower.parentElement.title = t('r_power');
-    this.tPop.textContent = `${fmt(co.pop)} · ${(co.morale * 100) | 0}%`;
-    const R_ = ['steel', 'fuel', 'electronics', 'supply', 'iron', 'coal'];
-    this.tRes.textContent = R_.map((r) => `${t('r_' + r).slice(0, 3)} ${fmt(co.res[R[r]])}`).join(' · ');
+    const ps = co.power.supply | 0, pd = co.power.demand | 0; this.tPower.textContent = `${ps}/${pd}`;
+    this.sPower.className = 'stat power ' + (ps >= pd ? 'ok' : ps >= pd * 0.6 ? 'warn' : 'bad');
+    this.tPop.textContent = `${fmt(co.pop)} ${(co.morale * 100) | 0}%`;
+    for (const r in this.chips) { const v = co.res[R[r]]; this.chips[r].textContent = fmt(v); this.chips[r].parentElement.classList.toggle('low', v < 5); }
+    if (!this.resHist.length || sim.tick - this.resHist[this.resHist.length - 1].t >= 60) { this.resHist.push({ t: sim.tick, v: Array.from(co.res) }); if (this.resHist.length > 6) this.resHist.shift(); }
     const hh = Math.floor(env.hour), mm = Math.floor((env.hour - hh) * 60);
     this.tDate.textContent = `${t('day')}${env.day + 1} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')} ${['❀', '☀', '❦', '❄'][env.season]}${{ clear: '', rain: ' ☂', fog: ' ≋', storm: ' ϟ', snow: ' ❅' }[env.weather]}${env.mud ? ' ' + t('mud') : ''}`; this.tDate.title = t('season_' + env.season) + ' · ' + t('w_' + env.weather);
     this.spBtns.forEach((b, k) => b.classList.toggle('on', k === 0 ? g.paused : !g.paused && g.speed === [0, 1, 2, 4][k]));
@@ -105,46 +119,14 @@ export class HUD {
   frame(dt) {
     this.tAcc += dt; this.miniAcc += dt;
     if (this.tAcc > 0.25) { this.tAcc = 0; this.updateTop(); this.refreshContext(); if (this.panels.cur) this.panels.refresh(); }
-    if (this.miniAcc > 1) { this.miniAcc = 0; this.drawMini(); }
-    this.drawMiniView(); this.updateLabels();
+    if (this.miniAcc > 1) { this.miniAcc = 0; this.countDrones(); }
+    this.updateLabels();
     const g = this.g;
     if (g.app.settings.debug) this.debug.textContent = `${g.fps | 0} FPS · tick ${g.tickMs.toFixed(1)}ms · ${g.sim.e.count} varlık · ${g.view.parts.n} parçacık · ${g.app.renderer.kind}`;
     g.app.audio.ambient(g.sim.env.weather, this.visibleDrones || 0);
     if (g.bus.desync && !this.desyncShown) { this.desyncShown = true; this.toast('DESYNC!', -1, -1, 3); }
   }
-  drawMini() {
-    const g = this.g, sim = g.sim, map = sim.map, c = this.mini, x = c.getContext('2d');
-    const S = 128; if (!this.miniImg) this.miniImg = x.createImageData(S, S);
-    const d = this.miniImg.data; const co = sim.countries[g.player];
-    for (let y = 0; y < S; y++) for (let xx = 0; xx < S; xx++) {
-      const mx = (xx * map.W / S) | 0, my = (y * map.H / S) | 0, i = my * map.W + mx;
-      let col = TER_COL[map.ter[i]];
-      const o = map.owner[i]; let r = col[0], gg = col[1], b = col[2];
-      if (o !== 255) { const tc = PRGB[TEAM[o % TEAM.length]]; r = r * 0.55 + tc[0] * 0.45; gg = gg * 0.55 + tc[1] * 0.45; b = b * 0.55 + tc[2] * 0.45; }
-      if (!g.spectator) { const vi = ((my / VIS_CELL) | 0) * co.vw + ((mx / VIS_CELL) | 0); const f = co.visNow[vi] ? 1 : co.vis[vi] ? 0.65 : 0.3; r *= f; gg *= f; b *= f; }
-      const k = (y * S + xx) * 4; d[k] = r; d[k + 1] = gg; d[k + 2] = b; d[k + 3] = 255;
-    }
-    // ögeler
-    const e = sim.e; let drones = 0;
-    for (let i = 0; i < e.hi; i++) {
-      const k = e.kind[i]; if (!k || (e.flags[i] & F.DEAD) || k === KIND.PROJ) continue;
-      if (!g.view.visibleTo(i)) continue;
-      if (k === KIND.AIR) drones++;
-      const px = (e.x[i] / map.W * S) | 0, py = (e.y[i] / map.H * S) | 0; if (px < 0 || py < 0 || px >= S || py >= S) continue;
-      const kk = (py * S + px) * 4; const own = e.owner[i] === g.player;
-      if (k === KIND.CITY) { d[kk] = 255; d[kk + 1] = 255; d[kk + 2] = 255; }
-      else { d[kk] = own ? 120 : 255; d[kk + 1] = own ? 200 : 60; d[kk + 2] = own ? 255 : 50; }
-    }
-    this.visibleDrones = drones;
-    x.putImageData(this.miniImg, 0, 0);
-    this.miniBase = x.getImageData(0, 0, S, S);
-  }
-  drawMiniView() {
-    const g = this.g, x = this.mini.getContext('2d'), map = g.sim.map, r = g.app.renderer, S = 128;
-    if (!this.miniBase) return; x.putImageData(this.miniBase, 0, 0);
-    const c = g.view.cam; const w = r.W / c.zoom / 16 / map.W * S, hh = r.H / c.zoom / 16 / map.H * S;
-    x.strokeStyle = '#fff'; x.lineWidth = 1; x.strokeRect(c.x / 16 / map.W * S - w / 2, c.y / 16 / map.H * S - hh / 2, w, hh);
-  }
+  countDrones() { const g = this.g, e = g.sim.e; let n = 0; e.each(C.AIR, (i) => { if (g.view.visibleTo(i)) n++; }); this.visibleDrones = n; }
   updateLabels() {
     const g = this.g, e = g.sim.e, dpr = g.app.dpr; let n = 0;
     if (g.view.cam.zoom >= 1) e.each(C.CITY, (i) => {
@@ -161,6 +143,21 @@ export class HUD {
       n++;
     });
     for (let k = n; k < this.labelPool.length; k++) this.labelPool[k].style.display = 'none';
+    // maden yatağı etiketleri: ikon + ad + büyüklük (+ işletiliyorsa ✓)
+    let m = 0; const W_ = g.app.renderer.W, H_ = g.app.renderer.H;
+    const show = g.view.cam.zoom >= 2 || g.view.layer === 'resources';
+    if (show && g.deposits) for (const d of g.deposits.list) {
+      if (m >= 40) break; if (d.n < 2 && g.view.layer !== 'resources') continue;
+      const [sx, sy] = g.w2s(d.x, d.y + 0.6); if (sx < -60 || sy < 40 || sx > W_ + 60 || sy > H_ - 60) continue;
+      let el = this.depPool[m];
+      if (!el) { el = h('div', { class: 'dlabel' }, h('img', { class: 'ico' }), h('span')); this.labels.append(el); this.depPool[m] = el; }
+      const worked = depositWorked(g.sim, d) >= 0;
+      const txt = `${t('r_' + d.res)} · ${t(d.n <= 4 ? 'dep_s' : d.n <= 10 ? 'dep_m' : 'dep_l')}${worked ? ' ✓' : ''}`;
+      if (el._t !== txt) { el._t = txt; el.lastChild.textContent = txt; el.firstChild.src = this.iconSrc('res:' + d.res); el.classList.toggle('worked', worked); }
+      el.style.transform = `translate(${(sx / dpr) | 0}px,${(sy / dpr) | 0}px) translate(-50%,0)`; el.style.display = '';
+      m++;
+    }
+    for (let k = m; k < this.depPool.length; k++) this.depPool[k].style.display = 'none';
   }
 
   // ---------- alt bağlam menüsü ----------
@@ -168,7 +165,7 @@ export class HUD {
     const sig = this.ctxSig(); if (sig !== this.lastSig) this.renderContext();
   }
   ctxSig() {
-    const g = this.g, e = g.sim.e; let s = (g.mode || '') + '|' + [...g.view.sel].join(',');
+    const g = this.g, e = g.sim.e; let s = (g.mode || '') + '|' + [...g.view.sel].join(',') + '|d' + g.depSel + '|r' + g.repeatBuild;
     for (const i of g.view.sel) if (e.alive(i)) s += `|${e.flags[i] & (F.RUINED | F.BUILDING | F.EMIT_ON)}|${e.item[i]}|${e.prio[i]}|${(e.hp[i] / e.maxhp[i] * 10) | 0}|${e.state[i]}`;
     if (g.view.ghost) s += '|g' + g.view.ghost.ok;
     return s;
@@ -182,12 +179,27 @@ export class HUD {
     } else this.banner.classList.add('hidden');
     if (g.mode === 'build') {
       const gh = g.view.ghost; const bd = BUILDINGS[g.modeData.def];
-      B.append(h('div', { class: 'ctx-title' }, this.icon(`b:${bd.id}:0`, PAL[TEAM[g.player]], 1), t('b_' + bd.id), gh && !gh.ok ? h('span', { class: 'err' }, ' — ' + t(gh.reason)) : ''),
-        h('div', { class: 'acts' }, btn('✓ ' + t('confirm'), () => g.confirmBuild(), gh && gh.ok ? 'ok' : 'dis'), btn('✗ ' + t('cancel'), () => g.setMode(null))));
+      B.append(h('div', { class: 'ctx-title' }, this.icon(`b:${bd.id}:0`, PAL[TEAM[g.player]], 1), t('b_' + bd.id)),
+        h('div', { class: 'lines' }, gh ? (gh.ok ? h('span', { class: 'kv okc' }, '✓ ' + t('place_ok')) : h('span', { class: 'kv bad' }, '✗ ' + t(gh.reason))) : h('span', { class: 'kv' }, t('place_hint'))),
+        h('div', { class: 'acts' }, btn('✓ ' + t('build_do'), () => g.confirmBuild(), gh && gh.ok ? 'ok big' : 'dis big'),
+          btn('↻ ' + t('build_repeat'), () => { g.repeatBuild = !g.repeatBuild; this.renderContext(); }, g.repeatBuild ? 'on' : ''),
+          btn('✗ ' + t('cancel'), () => g.setMode(null), 'warn')));
       return;
     }
     if (g.mode) { B.append(h('div', { class: 'acts' }, btn('✗ ' + t('cancel'), () => g.setMode(null)))); return; }
     const sel = [...g.view.sel].filter((i) => e.alive(i));
+    if (!sel.length && g.depSel >= 0 && g.deposits) {
+      const d = g.deposits.list[g.depSel]; const map = sim.map;
+      const own = d.tiles.some((ti) => map.owner[ti] === g.player); const w = depositWorked(sim, d);
+      const isWell = d.code === 3 || d.code === 4; const bdef = isWell ? 'well' : 'mine';
+      B.append(h('div', { class: 'ctx-title' }, this.icon('res:' + d.res, null, 3), t('dep_title', ['r_' + d.res])),
+        h('div', { class: 'lines' }, h('span', { class: 'kv' }, h('b', {}, t('dep_size') + ': '), `${d.n} ${t('dep_tiles')} (${t(d.n <= 4 ? 'dep_s' : d.n <= 10 ? 'dep_m' : 'dep_l')})`),
+          h('span', { class: 'kv ' + (w >= 0 ? '' : 'bad') }, h('b', {}, t('dep_state') + ': '), w >= 0 ? t('dep_worked') : t('dep_free')),
+          h('span', { class: 'kv' + (own ? '' : ' bad') }, h('b', {}, t('st_owner') + ': '), own ? t('dep_ours') : t('dep_foreign')),
+          h('span', { class: 'kv' }, h('b', {}, t('dep_use') + ': '), t('dep_use_' + d.res))),
+        h('div', { class: 'acts' }, w < 0 && own && !g.spectator ? btn((isWell ? '🛢 ' : '⛏ ') + t('b_' + bdef), () => g.buildOnDeposit(d, bdef), 'big ok') : '', btn('✕', () => { g.depSel = -1; this.renderContext(); })));
+      return;
+    }
     if (!sel.length) {
       B.append(h('div', { class: 'acts' }, g.spectator ? '' : btn('⚒ ' + t('p_build'), () => this.panels.open('build'), 'big'),
         btn('⌖', () => { const c = sim.world.countries[g.player].capital; g.jumpTo(c.x, c.y); }, '', { title: 'Başkent' }),

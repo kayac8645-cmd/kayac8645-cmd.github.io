@@ -1,5 +1,15 @@
 # Değişiklik Günlüğü
 
+## 0.16.0 — Yeni görsel kimlik ve arayüz
+- **Tüm çizimler yeniden yapıldı (harici görsel yok):** `render/art.js` araç takımı (derinlikli kutu, ışık/gölge rampası, renkli dış hat, yere düşen gölge) ve `render/looks.js` ile 38 binanın tamamı (sağlam/hasarlı/harabe), 11 kara aracı, yukarıdan jet/helikopter/deniz dronu/korvet, 8 tür şehir yapısı (müstakil ev, sıra ev, apartman, ofis kulesi, market, benzinlik, okul, park) ve mevsimlik ağaçlar. Kenney paketleri kaldırıldı.
+- **Şehir yerleşimi:** merkezde ofis/apartman, ortada apartman/dükkân/sıra ev, kenarda müstakil ev, okul, park, benzinlik; daha seyrek. Gece pencere ışıkları binanın kendi pencerelerinden; elektrik kesilince sönüyor.
+- **Maden yatakları belirlendi:** 7 kaynağın kendi çizimi (paslı kaya, kömür yığını, petrol gölcüğü, gaz bacası, bakır, uranyum/nadir kristali). Haritada ikonlu etiket ("Demir · büyük ✓"), dokununca bilgi kartı ve "Maden/Kuyu kur" düğmesi.
+- **Üst şerit:** kısaltmalar kalktı; her kaynak için piksel ikon + sayı, kaydırılabilir şerit, dokununca ad ve saatlik değişim.
+- **İnşa arayüzü:** büyük kartlar, ikonlu maliyet (eksik kaynak kırmızı), elektrik/işçi ikonları, basılı tutunca açıklama, yeni "Şehir" sekmesi. Yerleştirme: hayalet ekran ortasında açılır, "✓ Kur / ↻ Tekrar / ✗ İptal" ve sebep satırı.
+- **Mini harita kaldırıldı.**
+- **Savaş sisi seçeneği:** yeni oyun menüsü ve oyun içi menüden açılıp kapatılır; kapalıyken yapay zekâ da her şeyi görür (eşit kural, `CMD.RULE`).
+- **Halk Sığınağı:** yakındaki şehirde bombardımanın moral kaybını yarıya indirir.
+
 ## 0.15.0
 ### Aşama 15 — Online altyapı
 - `net/transport.js`: LocalPair (süreç içi), BroadcastChannel (sekmeler arası), WebSocket taşıma.
