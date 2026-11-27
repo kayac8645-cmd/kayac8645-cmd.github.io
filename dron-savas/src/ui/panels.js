@@ -10,6 +10,8 @@ import { LAUNCHERS } from '../sim/missiles.js';
 import { militaryStrength, DS } from '../sim/diplomacy.js';
 import { MARKET_PRICE, marketPrice } from '../sim/economy.js';
 import { listSaves, loadGame, saveSettings } from '../core/storage.js';
+import { LAYERS } from '../render/view.js';
+import { fmtHours } from './hud.js';
 import { h, clear, fmt, btn, flagCanvas } from './dom.js';
 import { t } from '../i18n/i18n.js';
 
@@ -19,7 +21,7 @@ export class Panels {
   constructor(hud) { this.hud = hud; this.g = hud.g; this.el = hud.panelEl; this.cur = null; this.arg = null; this.state = {}; }
   open(name, arg) { this.cur = name; this.arg = arg; this.el.classList.remove('hidden'); this.render(); }
   close() { this.cur = null; this.el.classList.add('hidden'); clear(this.el); }
-  refresh() { if (['build', 'mission', 'fire', 'jam', 'menu', 'product', 'market', 'diplo'].includes(this.cur)) { this.updateDynamic(); return; } this.render(); }
+  refresh() { if (['build', 'mission', 'fire', 'jam', 'menu', 'product', 'market', 'diplo', 'resources', 'hub'].includes(this.cur)) { this.updateDynamic(); return; } this.render(); }
   updateDynamic() { const d = this.el.querySelector('.dyn'); if (d && this.dyn) { const n = this.dyn(); clear(d).append(n); } }
   frame(title, ...body) {
     clear(this.el);
@@ -48,9 +50,10 @@ export class Panels {
         onpointerdown: () => { lp = setTimeout(() => { lp = 'shown'; this.hud.toast(t('b_' + bd.id) + ': ' + t('desc_' + bd.id), -1, -1, 0, 6000); }, 450); },
         onpointerup: () => { if (lp === 'shown') { lp = null; return; } clearTimeout(lp); lp = null; if (locked) { this.hud.toast(t('err_tech') + ': ' + t('t_' + bd.tech), -1, -1, 1); return; } this.close(); g.startBuild(i, hard); },
         onpointerleave: () => { if (lp && lp !== 'shown') clearTimeout(lp); } },
-        h('div', { class: 'bimg' }, this.hud.icon(`b:${bd.id}:0`, PAL[TEAM[g.player]], 2)),
+        h('div', { class: 'bimg' }, this.hud.icon(`b:${bd.id}:0`, PAL[TEAM[g.player]], 1)),
         h('div', { class: 'cname' }, t('b_' + bd.id)),
         locked ? h('div', { class: 'ccost lock' }, '🔒 ' + t('t_' + bd.tech)) : costRow(bd.cost),
+        bd.recipes && bd.recipes[0].out === 'money' ? h('div', { class: 'cinfo okc' }, this.hud.icon('res:money', null, 1), `+${Math.round(bd.recipes[0].n * 60 / bd.recipes[0].t)}/${t('hour')}`) : '',
         h('div', { class: 'cinfo' }, bd.power > 0 ? h('span', { class: 'okc' }, this.hud.icon('res:power', null, 1), '+' + bd.power) : bd.power < 0 ? h('span', {}, this.hud.icon('res:power', null, 1), bd.power) : '',
           bd.workers ? h('span', {}, this.hud.icon('res:pop', null, 1), bd.workers) : ''));
       grid.append(card);
@@ -60,6 +63,30 @@ export class Panels {
       h('p', { class: 'small' }, t('build_hint')), grid);
   }
 
+  // ---------- MENÜ (eski sol sütun) ----------
+  p_hub() {
+    const g = this.g; const go = (k) => () => this.open(k);
+    const layerBtn = btn('◧ ' + t('l_layer') + ': ' + t('l_' + g.view.layer), () => { const k = (LAYERS.indexOf(g.view.layer) + 1) % LAYERS.length; g.view.layer = LAYERS[k]; this.render(); }, 'hubbtn');
+    const items = g.spectator ? [['◉', 'p_intel', 'intel'], ['☰', 'p_log', 'log'], ['⚙', 'm_settings', 'menu']]
+      : [['▤', 'p_prod', 'prod'], ['⛏', 'p_resources', 'resources'], ['⚑', 'p_diplo', 'diplo'], ['◉', 'p_intel', 'intel'], ['¤', 'p_market', 'market'], ['☰', 'p_log', 'log'], ['⚙', 'p_save', 'menu']];
+    this.frame(t('p_menu'), h('div', { class: 'hub' }, items.map(([ic, key, pn]) => btn(h('span', { class: 'hubic' }, ic), go(pn), 'hubbtn', {}), ), layerBtn));
+    [...this.el.querySelectorAll('.hubbtn')].forEach((b, k) => { if (k < items.length) b.append(t(items[k][1])); });
+  }
+  // ---------- KAYNAKLAR: stok, üretim, tüketim, döküm ----------
+  p_resources() {
+    const g = this.g, co = this.co();
+    const tagName = (tg) => tg.startsWith('b_') ? t(tg) : t('tag_' + tg);
+    this.dyn = () => h('div', { class: 'list' }, RES.map((r, k) => {
+      const p = co.flowP[k] || 0, c = co.flowC[k] || 0, net = p - c;
+      const byC = Object.entries(co.flowByC[k] || {}).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([tg, v]) => `${tagName(tg)} −${v.toFixed(1)}`).join(' · ');
+      const byP = Object.entries(co.flowByP[k] || {}).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([tg, v]) => `${tagName(tg)} +${v.toFixed(1)}`).join(' · ');
+      return h('div', { class: 'row resrow' + (net < -0.01 ? ' neg' : '') },
+        this.hud.icon('res:' + r, null, 2), h('div', { class: 'grow' }, h('b', {}, `${t('r_' + r)}: ${fmt(co.res[k])}`),
+          h('div', { class: 'small' }, `+${p.toFixed(1)} / −${c.toFixed(1)} ${t('hour')} · net ${net >= 0 ? '+' : ''}${net.toFixed(1)}${net < -0.01 ? ' · ' + t('res_empty_in', [fmtHours(co.res[k] / -net)]) : ''}`),
+          byP ? h('div', { class: 'small okc' }, byP) : '', byC ? h('div', { class: 'small bad' }, byC) : ''));
+    }));
+    this.frame(t('p_resources'), h('p', { class: 'small' }, t('res_hint')), h('div', { class: 'dyn' }, this.dyn()));
+  }
   // ---------- ÜRETİM (genel) ----------
   p_prod() {
     const g = this.g, sim = g.sim, e = sim.e, co = this.co();
@@ -172,6 +199,8 @@ export class Panels {
     const g = this.g, co = this.co();
     this.dyn = () => h('div', { class: 'list' }, Object.keys(MARKET_PRICE).map((r) => h('div', { class: 'row' }, h('span', { class: 'grow' }, `${t('r_' + r)} (${fmt(co.res[R[r]])})`), h('span', { class: 'small' }, '¤' + marketPrice(g.sim, g.player, r)),
       btn('+10', () => g.issue({ type: CMD.MARKET, res: r, amt: 10 })), btn('+50', () => g.issue({ type: CMD.MARKET, res: r, amt: 50 })), btn('−10', () => g.issue({ type: CMD.MARKET, res: r, amt: 10, sell: true })))));
+    const arms = () => h('div', { class: 'list' }, ITEMS.map((it, k) => co.items[k] >= 1 ? h('div', { class: 'row' }, h('span', { class: 'grow' }, `${t('i_' + it.id)} (${co.items[k] | 0})`), h('span', { class: 'small' }, '¤' + fmt(it.cost.money * 0.7)), btn('−1', () => g.issue({ type: CMD.MARKET, item: it.id, n: 1 })), btn('−5', () => g.issue({ type: CMD.MARKET, item: it.id, n: 5 }))) : null));
+    const d0 = this.dyn; this.dyn = () => h('div', {}, d0(), h('h3', {}, t('mk_arms')), h('p', { class: 'small' }, t('mk_arms_hint')), arms());
     this.frame(t('p_market'), h('p', { class: 'small' }, t('mk_hint')), h('div', { class: 'dyn' }, this.dyn()));
   }
   // ---------- OLAY GÜNLÜĞÜ ----------

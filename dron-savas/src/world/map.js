@@ -22,6 +22,7 @@ export class GameMap {
     this.down = new Int32Array(N).fill(-1); // akış yönü (nehir/baraj taşkını)
     this.occ = new Int32Array(N); // bina varlık id + 1
     this.roadComp = new Int32Array(N).fill(-1);
+    this.fire = new Uint8Array(N); this.fireAge = new Uint8Array(N); this.burnt = new Uint8Array(N); this.cityTile = new Uint8Array(N);
     this.decals = []; // {x,y,r,k}
     this.dirtyChunks = new Set();
     this.version = 0; // render önbelleği için
@@ -32,10 +33,10 @@ export class GameMap {
   inb(x, y) { return x >= 0 && y >= 0 && x < this.W && y < this.H; }
   isWater(i) { const t = this.ter[i]; return t === T.DEEP || t === T.SEA || t === T.LAKE; }
   isLand(i) { const t = this.ter[i]; return t !== T.DEEP && t !== T.SEA && t !== T.LAKE && t !== T.RIVER; }
-  markDirty(x, y) { this.dirtyChunks.add(((y >> 5) << 16) | (x >> 5)); this.version++; }
+  markDirty(x, y) { this.dirtyChunks.add(((y >> 4) << 16) | (x >> 4)); this.version++; } // chunk = 16 karo
   markDirtyArea(x0, y0, x1, y1) {
-    for (let cy = Math.max(0, y0 >> 5); cy <= Math.min((this.H - 1) >> 5, y1 >> 5); cy++)
-      for (let cx = Math.max(0, x0 >> 5); cx <= Math.min((this.W - 1) >> 5, x1 >> 5); cx++) this.dirtyChunks.add((cy << 16) | cx);
+    for (let cy = Math.max(0, y0 >> 4); cy <= Math.min((this.H - 1) >> 4, y1 >> 4); cy++)
+      for (let cx = Math.max(0, x0 >> 4); cx <= Math.min((this.W - 1) >> 4, x1 >> 4); cx++) this.dirtyChunks.add((cy << 16) | cx);
     this.version++;
   }
   // kara birimi için geçilebilirlik (köprüler dahil)

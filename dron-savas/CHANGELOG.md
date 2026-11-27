@@ -1,5 +1,18 @@
 # Değişiklik Günlüğü
 
+## 0.17.0 — Yeni başlangıç, sınırlar, rezervler, 32 px grafik
+- **32 px grafik:** karo 16 → 32 px. Binalar 2 kat detayla (yerel çözünürlükte pencere, doku, dış hat, gölge), tank/piyade/SAM yeni 32 px çizimler, arazi deseni/geçişler/yol/nehir/kıyı 32 px.
+- **Şehirler kare adalarda:** 3×3 karoluk adalar, sokaklar ve yaya geçitleri; konut adası (bahçeli), apartman avlusu/otopark, ofis + meydan, çarşı, okul, park. Boşluksuz, merkezden dışa; nüfusla büyür ama üst sınırı var (başkent 10, şehir 7 karo).
+- **Başkenti sen seçersin:** oyun tüm harita açık başlar; dokunduğun yerin çevresindeki kaynaklar rezervleriyle özetlenir. YZ ülkeleri senden uzağa yerleşir. Başlangıç: başkent + karargâh + bir kömür santrali + küçük stok.
+- **Sınırlar:** dünya sahipsiz başlar; şehirler çevresini sahiplenir ve büyüdükçe genişler. "Şehir Kur" ile sınırın 4 karo dışına kadar yeni şehir (en az 16 karo arayla).
+- **Rezervler:** her yatağın gerçek birimli rezervi (t, varil, m³) var; bazısı küçük, bazısı dev. Madenler çekip tüketir, bitince durur. Etiket, yatak kartı ve Kaynaklar paneli üretim/tüketim dökümünü ve bitiş süresini gösterir.
+- **Para kazandıran fabrikalar:** Tekstil, Gıda, Otomotiv, Ev Elektroniği (Sivil Sanayi sekmesi). Silah ihracatı (Piyasa).
+- **Araştırma kaldırıldı:** her şey baştan açık; pahalı sistemlerin fiyatı yükseltildi.
+- **Yangın:** patlamalar ateş başlatır; orman/şehir/binalarda rüzgâr yönünde yayılır, yağmur ve kar söndürür; yanık zemin zamanla yeşerir. İtfaiye İstasyonu. Zincirleme patlamalar (mühimmat, füze, yakıt), günlerce yanan petrol yangınları, ekran parlaması, mantar bulutu, titreşim.
+- **Harita:** 2048×2048 seçeneği; zoom tüm haritayı görecek kadar uzaklaşır (stratejik genel bakış dokusu).
+- **Arayüz:** sol sütun kaldırıldı; Menü paneli (büyük yazılı düğmeler, harita katmanı seçimi). Yatak etiketleri çakışmaz.
+- **Teknik:** `opts.humans` ile çok oyunculu kurulum, kayıt v3 (eski kayıtlar açılmaz), rota tehdit ızgarası önbelleği, YZ emir bekleme süresi.
+
 ## 0.16.0 — Yeni görsel kimlik ve arayüz
 - **Tüm çizimler yeniden yapıldı (harici görsel yok):** `render/art.js` araç takımı (derinlikli kutu, ışık/gölge rampası, renkli dış hat, yere düşen gölge) ve `render/looks.js` ile 38 binanın tamamı (sağlam/hasarlı/harabe), 11 kara aracı, yukarıdan jet/helikopter/deniz dronu/korvet, 8 tür şehir yapısı (müstakil ev, sıra ev, apartman, ofis kulesi, market, benzinlik, okul, park) ve mevsimlik ağaçlar. Kenney paketleri kaldırıldı.
 - **Şehir yerleşimi:** merkezde ofis/apartman, ortada apartman/dükkân/sıra ev, kenarda müstakil ev, okul, park, benzinlik; daha seyrek. Gece pencere ışıkları binanın kendi pencerelerinden; elektrik kesilince sönüyor.

@@ -60,7 +60,7 @@ export function aiAccept(sim, from, to, action) {
   const sf = militaryStrength(sim, from), st = militaryStrength(sim, to);
   const ratio = sf / Math.max(1, st); const rel = sim.diplo.relOf(from, to);
   if (action === 'peace' || action === 'ceasefire') {
-    const losing = co.territory < co.territory0 * 0.85 || ratio > 1.3;
+    const losing = co.territory < (co.territoryMax || co.territory0) * 0.85 || ratio > 1.3;
     const score = (losing ? 0.5 : 0) + (1 - (p.aggr ?? 0.5)) * 0.4 + rel / 300 + (action === 'ceasefire' ? 0.15 : 0);
     return score > 0.45;
   }
@@ -141,9 +141,9 @@ export function updateDiplomacy(sim) {
     const cnt = new Int32Array(n); const map = sim.map;
     for (let i = 0; i < map.N; i++) if (map.owner[i] < n) cnt[map.owner[i]]++;
     for (let c = 0; c < n; c++) {
-      const co = sim.countries[c]; co.territory = cnt[c];
+      const co = sim.countries[c]; co.territory = cnt[c]; co.territoryMax = Math.max(co.territoryMax || 0, cnt[c]);
       if (!co.alive || d.warCount(c) === 0) { co.surrenderScore = 0; continue; }
-      const terr = 1 - co.territory / Math.max(1, co.territory0);
+      const terr = 1 - co.territory / Math.max(1, co.territoryMax || co.territory0);
       const econ = co.power.demand > 0 ? 1 - Math.min(1, co.power.supply / co.power.demand) : 0;
       const mil = militaryStrength(sim, c);
       co.surrenderScore = terr * 0.55 + (1 - co.morale) * 0.3 + econ * 0.15 + (mil < 8 ? 0.15 : 0);

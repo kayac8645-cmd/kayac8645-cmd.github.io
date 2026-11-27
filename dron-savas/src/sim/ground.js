@@ -32,7 +32,7 @@ registerCommand(CMD.MOVE_UNITS, (sim, cmd) => {
       p = lead.p.slice(); const ti = ty * map.W + tx;
       if (map.inb(tx, ty) && pass(ti)) p[p.length - 1] = ti;
     } else {
-      p = map.astar(e.x[id] | 0, e.y[id] | 0, tx, ty, pass, 20000, true);
+      p = map.astar(e.x[id] | 0, e.y[id] | 0, tx, ty, pass, 12000, true);
       if (p && p.length) lead = { k, x: e.x[id], y: e.y[id], p };
     }
     if (!p || !p.length) continue;
@@ -77,7 +77,7 @@ export function updateGround(sim) {
         if (e.flags[i] & F.JAMMED) sp *= 0.9;
         if (d <= sp) { e.x[i] = gx; e.y[i] = gy; e.wp[i]++; } else { e.x[i] += dx / d * sp; e.y[i] += dy / d * sp; e.vx[i] = dx / d; e.vy[i] = dy / d; }
         moving = true;
-        if (u.fuelUse) co.res[R.fuel] = Math.max(0, co.res[R.fuel] - u.fuelUse);
+        if (u.fuelUse && co.res[R.fuel] > u.fuelUse) sim.subRes(c, R.fuel, u.fuelUse, 'units');
       }
     } else if (path) e.routes.delete(i);
     if (moving) { e.flags[i] |= F.MOVING; e.entrench[i] = Math.max(0, e.entrench[i] - 0.01); }

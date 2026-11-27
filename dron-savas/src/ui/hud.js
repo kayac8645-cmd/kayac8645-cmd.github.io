@@ -12,6 +12,11 @@ import { LAYERS } from '../render/view.js';
 import { frameIcon } from '../render/sprites.js';
 import { VIS_CELL } from '../sim/country.js';
 import { depositWorked } from '../world/deposits.js';
+import { capitalSiteOk, siteSummary } from '../sim/territory.js';
+import { RES_UNIT } from '../data/defs.js';
+// yatak/kaynak miktarı gerçek birimle (m³, varil, t)
+export function fmtReserve(res, units) { const [u, k] = RES_UNIT[res] || ['', 1]; return Math.round(units * k).toLocaleString('tr-TR') + ' ' + u; }
+export function fmtHours(hrs) { if (!isFinite(hrs)) return '∞'; return hrs < 48 ? Math.round(hrs) + ' ' + t('hour') : Math.round(hrs / 24) + ' ' + t('day').toLowerCase(); }
 import { B } from '../data/buildings.js';
 import { h, clear, fmt, btn, flagCanvas } from './dom.js';
 import { Panels } from './panels.js';
@@ -57,9 +62,10 @@ export class HUD {
       h('div', { class: 'row' }, this.strip, h('div', { class: 'speed' }, this.spBtns)));
   }
   resInfo(r) {
-    const co = this.g.sim.countries[this.g.player]; const H = this.resHist; let rate = 0;
-    if (H.length >= 2) { const a = H[0], b = H[H.length - 1]; rate = (b.v[R[r]] - a.v[R[r]]) / Math.max(1, (b.t - a.t) / 60); }
-    this.toast(`${t('r_' + r)}: ${fmt(co.res[R[r]])} · ${rate >= 0 ? '+' : ''}${rate.toFixed(1)}/saat`, -1, -1, 0, 3500);
+    const co = this.g.sim.countries[this.g.player]; const k = R[r];
+    const p = co.flowP[k] || 0, c = co.flowC[k] || 0, net = p - c;
+    const left = net < -0.01 ? ` · ${t('res_empty_in', [fmtHours(co.res[k] / -net)])}` : '';
+    this.toast(`${t('r_' + r)}: ${fmt(co.res[k])} · ${t('res_prod')} +${p.toFixed(1)} · ${t('res_cons')} −${c.toFixed(1)} /${t('hour')}${left}`, -1, -1, net < 0 ? 1 : 0, 4500);
   }
   updateTop() {
     const g = this.g, sim = g.sim, co = sim.countries[g.player], env = sim.env;
@@ -73,19 +79,7 @@ export class HUD {
     this.tDate.textContent = `${t('day')}${env.day + 1} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')} ${['❀', '☀', '❦', '❄'][env.season]}${{ clear: '', rain: ' ☂', fog: ' ≋', storm: ' ϟ', snow: ' ❅' }[env.weather]}${env.mud ? ' ' + t('mud') : ''}`; this.tDate.title = t('season_' + env.season) + ' · ' + t('w_' + env.weather);
     this.spBtns.forEach((b, k) => b.classList.toggle('on', k === 0 ? g.paused : !g.paused && g.speed === [0, 1, 2, 4][k]));
   }
-  buildSide() {
-    const g = this.g;
-    const L = btn('◧ ' + t('l_normal'), () => { const k = (LAYERS.indexOf(g.view.layer) + 1) % LAYERS.length; g.view.layer = LAYERS[k]; L.textContent = '◧ ' + t('l_' + LAYERS[k]); }, 'side');
-    this.side.append(L,
-      btn('▤ ' + t('p_prod'), () => this.panels.open('prod'), 'side'),
-      btn('⚗ ' + t('p_research'), () => this.panels.open('research'), 'side'),
-      btn('⚑ ' + t('p_diplo'), () => this.panels.open('diplo'), 'side'),
-      btn('◉ ' + t('p_intel'), () => this.panels.open('intel'), 'side'),
-      btn('¤ ' + t('p_market'), () => this.panels.open('market'), 'side'),
-      btn('☰ ' + t('p_log'), () => this.panels.open('log'), 'side'),
-      btn('⚙ ' + t('p_menu'), () => this.panels.open('menu'), 'side'));
-    if (g.spectator) [...this.side.children].slice(1, 6).forEach((b) => (b.style.display = 'none'));
-  }
+  buildSide() { this.side.style.display = 'none'; } // sol sütun kaldırıldı: tüm paneller Menü'de
   closePanel() { if (this.panelEl.classList.contains('hidden')) return false; this.panels.close(); return true; }
 
   // ---------- bildirimler ----------
@@ -144,15 +138,18 @@ export class HUD {
     });
     for (let k = n; k < this.labelPool.length; k++) this.labelPool[k].style.display = 'none';
     // maden yatağı etiketleri: ikon + ad + büyüklük (+ işletiliyorsa ✓)
-    let m = 0; const W_ = g.app.renderer.W, H_ = g.app.renderer.H;
-    const show = g.view.cam.zoom >= 2 || g.view.layer === 'resources';
+    const sim0 = g.sim; let m = 0; const W_ = g.app.renderer.W, H_ = g.app.renderer.H; const placed = [];
+    const show = (g.view.cam.zoom >= 1 || g.view.layer === 'resources' || sim0.phase === 'setup') && g.view.cam.zoom >= 1 / 8;
     if (show && g.deposits) for (const d of g.deposits.list) {
       if (m >= 40) break; if (d.n < 2 && g.view.layer !== 'resources') continue;
-      const [sx, sy] = g.w2s(d.x, d.y + 0.6); if (sx < -60 || sy < 40 || sx > W_ + 60 || sy > H_ - 60) continue;
+      const [sx, sy] = g.w2s(d.x, d.y + 0.6); if (sx < 80 * dpr || sy < 110 * dpr || sx > W_ - 80 * dpr || sy > H_ - 150 * dpr) continue;
       let el = this.depPool[m];
       if (!el) { el = h('div', { class: 'dlabel' }, h('img', { class: 'ico' }), h('span')); this.labels.append(el); this.depPool[m] = el; }
+      const lw = 150 * dpr, lh = 24 * dpr; let hit = false;
+      for (const q of placed) if (Math.abs(q[0] - sx) < lw && Math.abs(q[1] - sy) < lh) { hit = true; break; }
+      if (hit) continue; placed.push([sx, sy]);
       const worked = depositWorked(g.sim, d) >= 0;
-      const txt = `${t('r_' + d.res)} · ${t(d.n <= 4 ? 'dep_s' : d.n <= 10 ? 'dep_m' : 'dep_l')}${worked ? ' ✓' : ''}`;
+      const txt = `${t('r_' + d.res)} · ${d.reserve > 0 ? fmtReserve(d.res, d.reserve) : t('dep_depleted')}${worked ? ' ✓' : ''}`;
       if (el._t !== txt) { el._t = txt; el.lastChild.textContent = txt; el.firstChild.src = this.iconSrc('res:' + d.res); el.classList.toggle('worked', worked); }
       el.style.transform = `translate(${(sx / dpr) | 0}px,${(sy / dpr) | 0}px) translate(-50%,0)`; el.style.display = '';
       m++;
@@ -188,12 +185,24 @@ export class HUD {
     }
     if (g.mode) { B.append(h('div', { class: 'acts' }, btn('✗ ' + t('cancel'), () => g.setMode(null)))); return; }
     const sel = [...g.view.sel].filter((i) => e.alive(i));
+    if (sim.phase === 'setup' && !g.spectator) {
+      this.banner.textContent = t('setup_hint'); this.banner.classList.remove('hidden');
+      if (!g.siteSel) { B.append(h('div', { class: 'ctx-title' }, '★ ' + t('setup_title')), h('div', { class: 'lines' }, t('setup_help')), h('div', { class: 'acts' }, btn('−', () => g.zoomAt(g.app.renderer.W / 2, g.app.renderer.H / 2, -1)), btn('+', () => g.zoomAt(g.app.renderer.W / 2, g.app.renderer.H / 2, 1)))); return; }
+      const [x, y] = g.siteSel; const bad = capitalSiteOk(sim, x, y); const sm = siteSummary(sim, x, y);
+      const resLine = ['iron', 'coal', 'oil', 'gas', 'copper', 'uranium', 'rare'].filter((r) => sm[r] > 0).map((r) => h('span', { class: 'kv' }, this.icon('res:' + r, null, 1), `${t('r_' + r)} ${fmtReserve(r, sm[r])}`));
+      B.append(h('div', { class: 'ctx-title' }, '★ ' + t('setup_site')),
+        h('div', { class: 'lines' }, resLine.length ? resLine : h('span', { class: 'kv bad' }, t('setup_nores')), sm.river ? h('span', { class: 'kv okc' }, '≈ ' + t('setup_river')) : '', sm.coast ? h('span', { class: 'kv okc' }, '⚓ ' + t('setup_coast')) : '', bad ? h('span', { class: 'kv bad' }, '✗ ' + t(bad)) : ''),
+        h('div', { class: 'acts' }, btn('★ ' + t('setup_found'), () => g.foundCapital(), bad ? 'dis big' : 'ok big'), btn('✕', () => { g.siteSel = null; this.renderContext(); })));
+      return;
+    }
     if (!sel.length && g.depSel >= 0 && g.deposits) {
       const d = g.deposits.list[g.depSel]; const map = sim.map;
       const own = d.tiles.some((ti) => map.owner[ti] === g.player); const w = depositWorked(sim, d);
       const isWell = d.code === 3 || d.code === 4; const bdef = isWell ? 'well' : 'mine';
       B.append(h('div', { class: 'ctx-title' }, this.icon('res:' + d.res, null, 3), t('dep_title', ['r_' + d.res])),
-        h('div', { class: 'lines' }, h('span', { class: 'kv' }, h('b', {}, t('dep_size') + ': '), `${d.n} ${t('dep_tiles')} (${t(d.n <= 4 ? 'dep_s' : d.n <= 10 ? 'dep_m' : 'dep_l')})`),
+        h('div', { class: 'lines' }, h('span', { class: 'kv' }, h('b', {}, t('dep_reserve') + ': '), `${fmtReserve(d.res, d.reserve)} / ${fmtReserve(d.res, d.reserve0)}`),
+          d.rate > 0 ? h('span', { class: 'kv' }, h('b', {}, t('dep_rate') + ': '), `−${fmtReserve(d.res, d.rate)}/${t('hour')} · ${t('res_empty_in', [fmtHours(d.reserve / d.rate)])}`) : '',
+          d.reserve <= 0 ? h('span', { class: 'kv bad' }, t('dep_depleted')) : '',
           h('span', { class: 'kv ' + (w >= 0 ? '' : 'bad') }, h('b', {}, t('dep_state') + ': '), w >= 0 ? t('dep_worked') : t('dep_free')),
           h('span', { class: 'kv' + (own ? '' : ' bad') }, h('b', {}, t('st_owner') + ': '), own ? t('dep_ours') : t('dep_foreign')),
           h('span', { class: 'kv' }, h('b', {}, t('dep_use') + ': '), t('dep_use_' + d.res))),
@@ -202,7 +211,8 @@ export class HUD {
     }
     if (!sel.length) {
       B.append(h('div', { class: 'acts' }, g.spectator ? '' : btn('⚒ ' + t('p_build'), () => this.panels.open('build'), 'big'),
-        btn('⌖', () => { const c = sim.world.countries[g.player].capital; g.jumpTo(c.x, c.y); }, '', { title: 'Başkent' }),
+        btn('☰ ' + t('p_menu'), () => this.panels.open('hub'), 'big'),
+        btn('⌖', () => { const c = sim.world.countries[g.player].capital; if (c) { g.jumpTo(c.x, c.y); if (g.view.cam.zoom < 1) g.view.cam.zoom = 2; } }, '', { title: 'Başkent' }),
         btn('−', () => g.zoomAt(g.app.renderer.W / 2, g.app.renderer.H / 2, -1)), btn('+', () => g.zoomAt(g.app.renderer.W / 2, g.app.renderer.H / 2, 1))));
       return;
     }

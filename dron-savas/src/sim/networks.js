@@ -53,7 +53,7 @@ function updatePower(sim) {
     if (bd.solar) out *= 0.15 + 0.85 * daylight * (sim.env.weather === 'clear' ? 1 : 0.55);
     if (bd.fuelRes) {
       const r = R[bd.fuelRes]; const need = bd.burn * 10;
-      if (co.res[r] >= need) co.res[r] -= need; else { out *= co.res[r] / need; co.res[r] = 0; }
+      if (co.res[r] >= need) sim.subRes(e.owner[i], r, need, 'b_' + bd.id); else { out *= co.res[r] / need; sim.subRes(e.owner[i], r, co.res[r], 'b_' + bd.id); }
     }
     if (bd.id === 'hydro' && sim.env.season === 1) out *= 0.7; // yaz kuraklığı
     e.sat[i] = 1;
@@ -91,7 +91,7 @@ function updatePower(sim) {
     // jeneratör: radarlar her zaman, diğer kritik binalar teknolojiyle
     if (s < 0.5 && bd && ((e.mask[i] & C.RADAR) || ((e.mask[i] & (C.AD | C.BASE | C.COMMS | C.JAMMER)) && hasGen(e.owner[i])))) {
       const co = sim.countries[e.owner[i]];
-      if (co.res[R.fuel] > 0.1) { co.res[R.fuel] -= 0.1; s = 0.75; e.flags[i] |= F.GENERATOR; }
+      if (co.res[R.fuel] > 0.1) { sim.subRes(e.owner[i], R.fuel, 0.1, 'generator'); s = 0.75; e.flags[i] |= F.GENERATOR; }
     }
     e.sat[i] = s;
     if (s >= 0.35) e.flags[i] |= F.POWERED; else e.flags[i] &= ~F.POWERED;

@@ -3,6 +3,8 @@
 export const RES = ['iron', 'coal', 'oil', 'gas', 'copper', 'uranium', 'rare', 'steel', 'fuel', 'electronics', 'explosives', 'composite', 'supply'];
 export const R = Object.fromEntries(RES.map((r, i) => [r, i]));
 export const RAW = ['iron', 'coal', 'oil', 'gas', 'copper', 'uranium', 'rare']; // harita yatakları 1..7
+// yatak rezervinin gerçek birimi: 1 oyun birimi = k birim
+export const RES_UNIT = { iron: ['t', 10], coal: ['t', 10], copper: ['t', 5], uranium: ['t', 0.5], rare: ['t', 1], oil: ['varil', 100], gas: ['m³', 1000] };
 export const RES_ICON = { iron: '⛏', coal: '◼', oil: '🛢', gas: '♨', copper: '◆', uranium: '☢', rare: '✦', steel: '▬', fuel: '⛽', electronics: '⚡', explosives: '✸', composite: '▦', supply: '📦' };
 
 // Hava savunma hedef sınıfları
@@ -71,17 +73,17 @@ export const ITEMS = [
   { id: 'fpv_fiber', unit: 'fpv_fiber', from: 'drone_fac', cost: c(70, 1.5, 1, 0.5), time: 50, cat: 'drone', tech: 'd_fiber' },
   { id: 'bomber_quad', unit: 'bomber_quad', from: 'drone_fac', cost: c(80, 2, 1.5, 1), time: 70, cat: 'drone' },
   { id: 'lr_kamikaze', unit: 'lr_kamikaze', from: 'drone_fac', cost: c(160, 3, 4, 3, 0, 1), time: 160, cat: 'drone', tech: 'd_lr' },
-  { id: 'male', unit: 'male', from: 'drone_fac', cost: c(900, 14, 10, 0, 4, 2), time: 700, cat: 'drone', tech: 'd_male' },
+  { id: 'male', unit: 'male', from: 'drone_fac', cost: c(1300, 16, 12, 0, 4, 2), time: 800, cat: 'drone', tech: 'd_male' },
   { id: 'interceptor_drone', unit: 'interceptor_drone', from: 'drone_fac', cost: c(35, 1.2, 0.5, 0.2), time: 30, cat: 'drone', tech: 'a_intdrone' },
   { id: 'mothership', unit: 'mothership', from: 'drone_fac', cost: c(500, 8, 8, 0, 2), time: 450, cat: 'drone', tech: 'd_mother' },
   { id: 'naval_drone', unit: 'naval_drone', from: 'drone_fac', cost: c(220, 3, 5, 4, 1, 1), time: 220, cat: 'drone', tech: 'd_naval' },
   { id: 'relay_drone', unit: 'relay_drone', from: 'drone_fac', cost: c(120, 4, 2), time: 120, cat: 'drone', tech: 'd_relay' },
-  { id: 'fighter', unit: 'fighter', from: 'missile_fac', cost: c(2600, 20, 14, 0, 20, 6), time: 1400, cat: 'aircraft', tech: 'l_air' },
+  { id: 'fighter', unit: 'fighter', from: 'missile_fac', cost: c(3600, 24, 16, 0, 24, 8), time: 1600, cat: 'aircraft', tech: 'l_air' },
   { id: 'heli', unit: 'heli', from: 'missile_fac', cost: c(1300, 10, 8, 0, 12, 3), time: 900, cat: 'aircraft', tech: 'l_air' },
   { id: 'rocket', proj: 'rocket', from: 'munitions', cost: c(6, 0, 0, 0.6, 0.3), time: 6, cat: 'munition', batch: 6 },
   { id: 'guided_rocket', proj: 'guided_rocket', from: 'missile_fac', cost: c(60, 1.5, 0.4, 0.8), time: 50, cat: 'missile', tech: 'm_guided' },
   { id: 'cruise', proj: 'cruise', from: 'missile_fac', cost: c(420, 6, 4, 3, 0, 2), time: 380, cat: 'missile', tech: 'm_cruise' },
-  { id: 'ballistic', proj: 'ballistic', from: 'missile_fac', cost: c(950, 10, 6, 6, 2, 6), time: 760, cat: 'missile', tech: 'm_ballistic' },
+  { id: 'ballistic', proj: 'ballistic', from: 'missile_fac', cost: c(1800, 14, 8, 8, 4, 8), time: 1000, cat: 'missile', tech: 'm_ballistic' },
   { id: 'antiship', proj: 'antiship', from: 'missile_fac', cost: c(380, 5, 3, 3, 0, 2), time: 320, cat: 'missile', tech: 'm_antiship' },
   { id: 'arm', proj: 'arm', from: 'missile_fac', cost: c(300, 6, 2, 2, 0, 1), time: 260, cat: 'missile', tech: 'm_arm' },
   { id: 'agm', proj: 'agm', from: 'missile_fac', cost: c(70, 1.5, 0.5, 0.8), time: 50, cat: 'missile' },

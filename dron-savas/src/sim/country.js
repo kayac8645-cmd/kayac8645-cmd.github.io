@@ -8,7 +8,7 @@ export function createCountry(info, map, isAI, personality) {
   const vw = Math.ceil(map.W / VIS_CELL), vh = Math.ceil(map.H / VIS_CELL);
   const c = {
     id: info.id, name: info.name, full: info.full, color: info.color, flag: info.flag,
-    capitalName: info.capital.name, alive: true, ai: isAI, personality: personality || null,
+    capitalName: info.capitalName, alive: true, placed: false, ai: isAI, personality: personality || null,
     capitalCity: -1, hq: -1,
     res: new Float64Array(RES.length), money: 0,
     items: new Float64Array(ITEMS.length),
@@ -25,9 +25,11 @@ export function createCountry(info, map, isAI, personality) {
     lossByJam: 0, lossByOther: 0, repairPts: 0, incomeLast: 0,
     trades: [], // {with, give, get, amt}
   };
-  c.res[R.steel] = 120; c.res[R.fuel] = 100; c.res[R.coal] = 150; c.res[R.iron] = 80; c.res[R.electronics] = 30;
-  c.res[R.composite] = 20; c.res[R.explosives] = 30; c.res[R.supply] = 80; c.res[R.gas] = 20; c.res[R.oil] = 20; c.res[R.copper] = 10;
-  c.money = 6000;
-  c.items[ITEM_BY.fpv] = 8; c.items[ITEM_BY.recon_quad] = 3; c.items[ITEM_BY.rocket] = 24; c.items[ITEM_BY.sam_s] = 6; c.items[ITEM_BY.agm] = 0;
+  // küçük başlangıç: biraz para, maden stokları ve (foundCountry'de) bir santral
+  c.res[R.steel] = 90; c.res[R.fuel] = 60; c.res[R.coal] = 120; c.res[R.iron] = 60; c.res[R.electronics] = 20;
+  c.res[R.composite] = 10; c.res[R.explosives] = 10; c.res[R.supply] = 40; c.res[R.gas] = 20; c.res[R.oil] = 20; c.res[R.copper] = 20;
+  c.money = 7000;
+  c.fp = new Float64Array(RES.length); c.fc = new Float64Array(RES.length); c.fbyP = []; c.fbyC = [];
+  c.flowP = new Float64Array(RES.length); c.flowC = new Float64Array(RES.length); c.flowByP = []; c.flowByC = [];
   return c;
 }

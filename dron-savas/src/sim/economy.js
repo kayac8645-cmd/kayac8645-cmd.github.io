@@ -2,7 +2,7 @@
 import { KIND, C, F } from '../core/ecs.js';
 import { CMD, registerCommand } from '../core/commands.js';
 import { BUILDINGS } from '../data/buildings.js';
-import { ITEMS, RECRUITS, R, RAW, UNIT_BY } from '../data/defs.js';
+import { ITEMS, ITEM_BY, RECRUITS, R, RAW, UNIT_BY } from '../data/defs.js';
 import { TECHS, TECH_BY } from '../data/tech.js';
 import { PRODUCT } from './build.js';
 
@@ -25,12 +25,13 @@ export function updateEconomy(sim) {
     if (e.kind[i] !== KIND.BUILDING || e.owner[i] >= nC || !usable(e, i)) continue;
     const bd = BUILDINGS[e.def[i]], c = e.owner[i], co = sim.countries[c];
     const eff = e.sat[i] * co.workSat * Math.max(0.3, e.hp[i] / e.maxhp[i]);
-    if (bd.id === 'mine' && e.res[i]) {
-      e.buf[i] = Math.min(40, e.buf[i] + bd.rate * eff * sim.mod(c, 'mine', 1));
-    } else if (bd.id === 'well' && e.res[i]) {
-      const amt = bd.rate * eff * sim.mod(c, 'mine', 1);
-      if (e.flags[i] & F.FUELED) co.res[R[RAW[e.res[i] - 1]]] += amt; // boru hattı -> doğrudan
-      else e.buf[i] = Math.min(40, e.buf[i] + amt); // konvoy bekler
+    if ((bd.id === 'mine' || bd.id === 'well') && e.res[i]) {
+      // yatak rezervinden çekim; tükenince durur
+      const dep = e.parent[i] >= 0 ? sim.deposits.list[e.parent[i]] : null;
+      let amt = bd.rate * eff * sim.mod(c, 'mine', 1);
+      if (dep) { if (dep.reserve <= 0) { if (!(e.flags[i] & F.JAMMED)) { e.flags[i] |= F.JAMMED; sim.notify(c, 'n_depleted', ['r_' + dep.res], e.x[i], e.y[i], 2); } continue; } amt = Math.min(amt, dep.reserve); dep.reserve -= amt; dep.drawn = (dep.drawn || 0) + amt; }
+      if (bd.id === 'mine' || !(e.flags[i] & F.FUELED)) e.buf[i] = Math.min(40, e.buf[i] + amt); // konvoy bekler
+      else sim.addRes(c, R[RAW[e.res[i] - 1]], amt, 'b_well'); // boru hattı -> doğrudan
     } else if (bd.caps && bd.caps.includes('research')) {
       if (co.researching >= 0) {
         co.rprog += bd.rate * eff;
@@ -61,12 +62,12 @@ function produce(sim, i, bd, c, co, rate) {
       if (!(e.flags[i] & F.JAMMED)) { e.flags[i] |= F.JAMMED; } // "girdi yok" işareti (UI)
       return;
     }
-    sim.pay(c, cost); e.state[i] = 1; e.timer[i] = 0; e.flags[i] &= ~F.JAMMED;
+    sim.pay(c, cost, 1, 'b_' + bd.id); e.state[i] = 1; e.timer[i] = 0; e.flags[i] &= ~F.JAMMED;
   }
   e.timer[i] += rate;
   if (e.timer[i] < time) return;
   e.state[i] = 0; e.timer[i] = 0;
-  if (kind === 'recipe') { const r = bd.recipes[p - PRODUCT.RECIPE - 1]; co.res[R[r.out]] += r.n; }
+  if (kind === 'recipe') { const r = bd.recipes[p - PRODUCT.RECIPE - 1]; if (r.out === 'money') { co.money += r.n; co.stats.civIncome = (co.stats.civIncome || 0) + r.n; } else sim.addRes(c, R[r.out], r.n, 'b_' + bd.id); }
   else if (kind === 'item') { const it = ITEMS[p - 1]; co.items[p - 1] += it.batch || 1; co.stats.produced++; }
   else {
     const r = RECRUITS[p - PRODUCT.UNIT - 1];
@@ -91,13 +92,12 @@ function updateCities(sim) {
       if (co.res[R.supply] < 5) target -= 0.05;
       e.supply[i] += (Math.max(0, target) - e.supply[i]) * 0.03;
       const info = sim.cityInfo.get(i);
-      if (e.supply[i] > 0.55 && powered && e.buf[i] < info.pop0 * 2.5) e.buf[i] *= 1.0012;
+      if (e.supply[i] > 0.55 && powered && e.buf[i] < (info.cap || info.pop0 * 2.5)) e.buf[i] *= 1.0015;
       if (e.supply[i] < 0.32) { // göç
         const leave = e.buf[i] > info.pop0 * 0.3 ? e.buf[i] * 0.0012 : 0; e.buf[i] -= leave;
         agg[c].migr = (agg[c].migr || 0) + leave * 0.6;
         if (e.supply[i] < 0.2 && sim.tick % 600 === 5) sim.notify(c, 'n_migration', [info.name], e.x[i], e.y[i], 2);
       }
-      e.prog[i] = Math.ceil(2 + Math.sqrt(e.buf[i]) / 22);
       agg[c].pop += e.buf[i]; agg[c].mor += e.supply[i] * e.buf[i];
       agg[c].wf += e.buf[i] * 0.42 * (0.45 + 0.55 * e.supply[i]);
       agg[c].cities.push(i);
@@ -120,7 +120,7 @@ function updateCities(sim) {
       const other = sim.countries[tr.with];
       if (!other || !other.alive || sim.atWar(c, tr.with)) continue;
       const g = R[tr.give], gt = R[tr.get];
-      if (co.res[g] >= tr.amt && other.res[gt] >= tr.amt) { co.res[g] -= tr.amt; other.res[g] += tr.amt; other.res[gt] -= tr.amt; co.res[gt] += tr.amt; }
+      if (co.res[g] >= tr.amt && other.res[gt] >= tr.amt) { sim.subRes(c, g, tr.amt, 'trade'); sim.addRes(tr.with, g, tr.amt, 'trade'); sim.subRes(tr.with, gt, tr.amt, 'trade'); sim.addRes(c, gt, tr.amt, 'trade'); }
     }
   }
 }
@@ -152,7 +152,7 @@ function updateRepair(sim) {
       const rate = (1.2 + near * 7) * 5 * sim.mod(c, 'repair', 1);
       const steelNeed = rate * 0.004;
       if (co.res[R.steel] < steelNeed) break;
-      co.res[R.steel] -= steelNeed;
+      sim.subRes(c, R.steel, steelNeed, 'repair');
       e.hp[i] = Math.min(e.maxhp[i], e.hp[i] + rate);
       if ((e.flags[i] & F.RUINED) && e.hp[i] >= e.maxhp[i] * 0.6) {
         e.flags[i] &= ~(F.RUINED | F.BURNING);
@@ -171,11 +171,16 @@ function updateRepair(sim) {
 export const MARKET_PRICE = { iron: 14, coal: 10, oil: 16, gas: 14, copper: 24, uranium: 90, rare: 60, steel: 45, fuel: 30, electronics: 70, explosives: 40, composite: 55, supply: 30 };
 export function marketPrice(sim, c, res) { return MARKET_PRICE[res] * (sim.diplo.warCount(c) > 0 ? 1.5 : 1); }
 registerCommand(CMD.MARKET, (sim, cmd) => {
-  const co = sim.countries[cmd.c]; const r = R[cmd.res]; if (r === undefined) return false;
+  const co = sim.countries[cmd.c];
+  if (cmd.item) { // silah ihracatı: stoktaki kalemi maliyetinin %70'ine sat
+    const ii = ITEM_BY[cmd.item]; const n = Math.min(cmd.n | 0, Math.floor(co.items[ii])); if (ii === undefined || n <= 0) return false;
+    co.items[ii] -= n; const gain = ITEMS[ii].cost.money * 0.7 * n; co.money += gain; co.stats.civIncome = (co.stats.civIncome || 0) + gain; return;
+  }
+  const r = R[cmd.res]; if (r === undefined) return false;
   const amt = Math.max(0, Math.min(500, +cmd.amt || 0)); const price = marketPrice(sim, cmd.c, cmd.res) * amt;
-  if (cmd.sell) { if (co.res[r] < amt) return false; co.res[r] -= amt; co.money += price * 0.6; return; }
+  if (cmd.sell) { if (co.res[r] < amt) return false; sim.subRes(cmd.c, r, amt, 'export'); co.money += price * 0.6; return; }
   if (co.money < price) return false;
-  co.money -= price; co.res[r] += amt;
+  co.money -= price; sim.addRes(cmd.c, r, amt, 'import');
 });
 
 registerCommand(CMD.RESEARCH, (sim, cmd) => {

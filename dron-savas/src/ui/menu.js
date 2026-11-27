@@ -17,14 +17,14 @@ export function showMenu(app) {
       btn(t('m_load'), () => saves(), 'big'),
       btn(t('m_spectate'), () => app.startNew({ seed: st.seed, size: MAP_SIZES.small, countries: 6, difficulty: 2, allAI: true, player: 0 }), 'big'),
       btn(t('m_settings'), () => settings(), 'big')),
-      h('p', { class: 'small foot' }, 'v0.16 · Pixelify Sans OFL'));
+      h('p', { class: 'small foot' }, 'v0.17 · Pixelify Sans OFL'));
   };
   const newGame = () => {
     const sel = (opts, cur, on) => h('div', { class: 'seg' }, opts.map(([v, l]) => btn(l, () => { on(v); newGame(); }, cur === v ? 'on' : '')));
     const maxAI = st.exp24 ? 23 : 7;
     clear(wrap).append(h('h2', {}, t('m_new')),
       h('label', {}, t('m_seed')), h('div', { class: 'row' }, h('input', { type: 'number', value: st.seed, oninput: (e) => (st.seed = (+e.target.value) | 0) }), btn('🎲', () => { st.seed = (Math.random() * 1e6) | 0; newGame(); })),
-      h('label', {}, t('m_size')), sel([['small', t('sz_small')], ['medium', t('sz_medium')], ['large', t('sz_large')]], st.size, (v) => (st.size = v)),
+      h('label', {}, t('m_size')), sel([['small', t('sz_small')], ['medium', t('sz_medium')], ['large', t('sz_large')], ['huge', t('sz_huge')]], st.size, (v) => (st.size = v)),
       h('label', {}, `${t('m_ai')}: ${st.ai}`), h('input', { type: 'range', min: 1, max: maxAI, value: Math.min(st.ai, maxAI), oninput: (e) => { st.ai = +e.target.value; e.target.previousSibling.textContent = `${t('m_ai')}: ${st.ai}`; } }),
       h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: st.exp24, onchange: (e) => { st.exp24 = e.target.checked; if (!st.exp24) st.ai = Math.min(st.ai, 7); newGame(); } }), t('m_exp24')),
       h('label', {}, t('m_diff')), sel(DIFFICULTY.map((d, k) => [k, t('diff_' + d.id)]), st.diff, (v) => (st.diff = v)),

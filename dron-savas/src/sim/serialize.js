@@ -3,7 +3,7 @@
 import { COLUMNS } from '../core/ecs.js';
 import { RNG } from '../core/rng.js';
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3; // 0.17: rezervler, yangın, sınırlar, başkent seçimi
 
 const B64 = typeof Buffer !== 'undefined'
   ? { enc: (u8) => Buffer.from(u8.buffer, u8.byteOffset, u8.byteLength).toString('base64'), dec: (s) => new Uint8Array(Buffer.from(s, 'base64')) }
@@ -23,7 +23,11 @@ export function serialize(sim) {
   return {
     v: SAVE_VERSION, opts: sim.opts, tick: sim.tick, rng: sim.rng.s, groups: sim.groups, winner: sim.winner, over: sim.over,
     ents: { hi: e.hi, count: e.count, free: e.free.slice(), cols, routes },
-    map: { owner: enc(map.owner), road: enc(map.road), flood: enc(map.flood), occ: enc(map.occ), decals: map.decals.map((d) => [d.x, d.y, d.r, d.k]) },
+    map: { owner: enc(map.owner), road: enc(map.road), flood: enc(map.flood), occ: enc(map.occ), fire: enc(map.fire), fireAge: enc(map.fireAge), burnt: enc(map.burnt), cityTile: enc(map.cityTile), decals: map.decals.map((d) => [d.x, d.y, d.r, d.k]) },
+    phase: sim.phase, setupTicks: sim.setupTicks || 0, capitals: sim.world.countries.map((c) => c.capital),
+    deposits: sim.deposits.list.map((d) => [d.reserve, d.drawn || 0, d.drawnPrev || 0, d.rate || 0]),
+    fireTiles: sim.fireTiles, burntList: sim.burntList, secondary: sim.secondary, oilFires: sim.oilFires,
+    routeCache: sim.routeCache ? Array.from(sim.routeCache).map(([k, v]) => [k, v.t, v.cost ? enc(v.cost) : null]) : [],
     floodTiles: sim.floodTiles || [],
     countries: sim.countries.map((c) => ({
       alive: c.alive, ai: c.ai, pers: c.personality && c.personality.id, capitalCity: c.capitalCity, hq: c.hq,
@@ -31,6 +35,8 @@ export function serialize(sim) {
       mods: c.mods, bands: c.bands, band: c.band, stats: c.stats, known: Array.from(c.known), emitters: Array.from(c.emitters),
       vis: enc(c.vis), territory: c.territory, territory0: c.territory0, morale: c.morale, pop: c.pop, trades: c.trades,
       lossByJam: c.lossByJam, lossByOther: c.lossByOther, workSat: c.workSat,
+      placed: c.placed, citiesFounded: c.citiesFounded || 0, territoryMax: c.territoryMax || 0,
+      fp: Array.from(c.fp), fc: Array.from(c.fc), fbyP: c.fbyP, fbyC: c.fbyC, flowP: Array.from(c.flowP), flowC: Array.from(c.flowC), flowByP: c.flowByP, flowByC: c.flowByC,
     })),
     diplo: { state: enc(sim.diplo.state), rel: enc(sim.diplo.rel), timer: enc(sim.diplo.timer), proposals: sim.diplo.proposals, pid: sim.diplo.pid },
     env: sim.env, cityInfo: Array.from(sim.cityInfo), delayed: sim.delayed, reveal: Array.from(sim.reveal),
@@ -41,6 +47,7 @@ export function serialize(sim) {
 
 // Sürüm geçişleri: eski kayıtları güncel biçime taşı
 export const MIGRATIONS = {
+  2: () => { throw new Error('0.16 kayıtları 0.17 dünya kurallarıyla uyumsuz (yeni başlangıç, sınırlar ve rezervler)'); },
   1: (s) => { s.reveal = s.reveal || []; s.floodTiles = s.floodTiles || []; for (const c of s.countries) { c.trades = c.trades || []; c.bands = c.bands ?? 15; } s.v = 2; return s; },
 };
 export function migrate(s) {
@@ -56,7 +63,12 @@ export function restore(SimClass, data, deps) {
   for (const [t, names] of Object.entries(COLUMNS)) for (const n of names) { e[n].fill(t === 'I32' ? -1 : 0); decInto(e[n], s.ents.cols[n]); }
   e.routes.clear(); for (const [id, k, b] of s.ents.routes) { const u = B64.dec(b); e.routes.set(id, k === 'i' ? new Int32Array(u.buffer, 0, u.length / 4).slice() : new Float32Array(u.buffer, 0, u.length / 4).slice()); }
   decInto(map.owner, s.map.owner); decInto(map.road, s.map.road); decInto(map.flood, s.map.flood); decInto(map.occ, s.map.occ);
+  decInto(map.fire, s.map.fire); decInto(map.fireAge, s.map.fireAge); decInto(map.burnt, s.map.burnt); decInto(map.cityTile, s.map.cityTile);
   map.decals = s.map.decals.map(([x, y, r, k]) => ({ x, y, r, k })); map.computeRoadComponents(); map.version++;
+  sim.phase = s.phase; sim.setupTicks = s.setupTicks || 0; s.capitals.forEach((cp, k) => { sim.world.countries[k].capital = cp; });
+  s.deposits.forEach(([rv, dr, dp, rt], k) => { const d = sim.deposits.list[k]; d.reserve = rv; d.drawn = dr; d.drawnPrev = dp; d.rate = rt; });
+  sim.fireTiles = s.fireTiles; sim.burntList = s.burntList; sim.secondary = s.secondary; sim.oilFires = s.oilFires;
+  sim.routeCache = new Map(s.routeCache.map(([k, t, c]) => { let cost = null; if (c) { const u = B64.dec(c); cost = new Float32Array(u.buffer, 0, u.length / 4).slice(); } return [k, { t, cost }]; }));
   sim.floodTiles = s.floodTiles;
   sim.tick = s.tick; sim.rng.s = s.rng; sim.groups = s.groups; sim.winner = s.winner; sim.over = s.over;
   s.countries.forEach((d, k) => {
@@ -67,6 +79,8 @@ export function restore(SimClass, data, deps) {
     c.known = new Map(d.known); c.emitters = new Map(d.emitters); decInto(c.vis, d.vis);
     c.territory = d.territory; c.territory0 = d.territory0; c.morale = d.morale; c.pop = d.pop; c.trades = d.trades;
     c.lossByJam = d.lossByJam || 0; c.lossByOther = d.lossByOther || 0; c.workSat = d.workSat ?? 1;
+    c.placed = d.placed; c.citiesFounded = d.citiesFounded; c.territoryMax = d.territoryMax;
+    c.fp.set(d.fp); c.fc.set(d.fc); c.fbyP = d.fbyP; c.fbyC = d.fbyC; c.flowP.set(d.flowP); c.flowC.set(d.flowC); c.flowByP = d.flowByP; c.flowByC = d.flowByC;
   });
   decInto(sim.diplo.state, s.diplo.state); decInto(sim.diplo.rel, s.diplo.rel); decInto(sim.diplo.timer, s.diplo.timer);
   sim.diplo.proposals = s.diplo.proposals; sim.diplo.pid = s.diplo.pid;

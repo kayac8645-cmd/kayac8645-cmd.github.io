@@ -4,6 +4,7 @@ import { CMD, registerCommand } from '../core/commands.js';
 import { BUILDINGS, B, HARDEN } from '../data/buildings.js';
 import { ITEMS, ITEM_BY, RECRUIT_BY } from '../data/defs.js';
 import { T, RD } from '../world/map.js';
+import { citySiteOk, completeCityFounding } from './territory.js';
 
 const CAP_MASK = {
   power: C.POWER, comms: C.COMMS, depot: C.DEPOT, factory: C.FACTORY, radar: C.RADAR | C.EMIT, ad: C.AD,
@@ -20,6 +21,7 @@ export function canPlace(sim, c, defIdx, tx, ty, opts = {}) {
     if (d.cat === 'none') return 'err_tech';
     if (!sim.canAfford(c, d.cost, opts.hardened ? HARDEN.cost : 1)) return 'err_cost';
   }
+  if (d.place === 'citysite') { const r = citySiteOk(sim, c, tx, ty); if (r) return r; if (map.occ[ty * map.W + tx] || map.road[ty * map.W + tx]) return 'err_occupied'; return ''; }
   let river = 0, deposit = 0, oil = 0;
   for (let y = ty; y < ty + h; y++) for (let x = tx; x < tx + w; x++) {
     if (!map.inb(x, y)) return 'err_bounds';
@@ -99,6 +101,7 @@ export function placeBuilding(sim, c, defIdx, tx, ty, opts = {}) {
       if (d.place === 'deposit' && DEPOSIT_RES.includes(map.res[i])) e.res[id] = map.res[i];
       if (d.place === 'oilgas' && (map.res[i] === 3 || map.res[i] === 4)) e.res[id] = map.res[i];
     }
+    if (e.res[id] && e.parent[id] < 0 && sim.deposits && sim.deposits.idx[i] >= 0 && map.res[i] === e.res[id]) e.parent[id] = sim.deposits.idx[i];
   }
   // varsayılan ürün
   if (d.recipes) e.item[id] = PRODUCT.RECIPE + 0 + 1;
@@ -106,7 +109,7 @@ export function placeBuilding(sim, c, defIdx, tx, ty, opts = {}) {
   else if (d.items && d.id === 'missile_fac') e.item[id] = ITEM_BY.sam_s + 1;
   else if (d.items) e.item[id] = ITEM_BY[d.items[0]] + 1;
   if (d.id === 'munitions') e.item[id] = PRODUCT.RECIPE + 1 + 1; // ikmal
-  connectRoad(sim, id, !!opts.free);
+  if (d.id !== 'city_found') connectRoad(sim, id, !!opts.free);
   map.markDirtyArea(tx - 1, ty - 1, tx + w + 1, ty + h + 1);
   markNetDirty(sim);
   return id;
@@ -163,6 +166,7 @@ export function updateConstruction(sim) {
     e.prog[i] += 0.5 + 0.5 * co.workSat;
     e.hp[i] = Math.min(e.maxhp[i], e.maxhp[i] * (0.1 + 0.9 * e.prog[i] / need));
     if (e.prog[i] >= need) {
+      if (d.id === 'city_found') { completeCityFounding(sim, i); continue; }
       e.flags[i] &= ~F.BUILDING; e.hp[i] = e.maxhp[i];
       markNetDirty(sim);
       sim.map.markDirty(e.ox[i], e.oy[i]);

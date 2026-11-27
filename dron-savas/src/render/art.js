@@ -22,17 +22,19 @@ export function shade(c, f) {
 const pack = (c, a = 255) => ((a << 24) | (c[2] << 16) | (c[1] << 8) | c[0]) >>> 0;
 
 export class Art {
-  constructor(w, h, seed = 1) { this.w = w; this.h = h; this.d = new Uint32Array(w * h); this.rng = new RNG(seed); this.shadowSet = null; }
-  p(x, y, c) { x |= 0; y |= 0; if (x < 0 || y < 0 || x >= this.w || y >= this.h) return; this.d[y * this.w + x] = pack(hex(c)); }
+  // w,h: yerel piksel; S: ölçek (mantıksal koordinat × S = yerel piksel). Detay (pencere, doku, dış hat) yerel çözünürlükte.
+  constructor(w, h, seed = 1, S = 1) { this.w = w; this.h = h; this.S = S; this.d = new Uint32Array(w * h); this.rng = new RNG(seed); this.shadowSet = null; }
+  np(x, y, c) { x |= 0; y |= 0; if (x < 0 || y < 0 || x >= this.w || y >= this.h) return; this.d[y * this.w + x] = pack(hex(c)); }
+  p(x, y, c) { const S = this.S; if (S === 1) return this.np(x, y, c); const k = hex(c); const X = Math.round(x * S), Y = Math.round(y * S); for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) this.np(X + i, Y + j, k); }
   team(x, y) { this.p(x, y, TEAMC); }
-  g(x, y) { x |= 0; y |= 0; if (x < 0 || y < 0 || x >= this.w || y >= this.h) return 0; return this.d[y * this.w + x]; }
+  g(x, y) { const S = this.S; x = (x * S) | 0; y = (y * S) | 0; if (x < 0 || y < 0 || x >= this.w || y >= this.h) return 0; return this.d[y * this.w + x]; }
   gc(x, y) { const v = this.g(x, y); return [v & 255, (v >> 8) & 255, (v >> 16) & 255]; }
-  rect(x, y, w, h, c) { const k = hex(c); for (let yy = y | 0; yy < (y + h) | 0; yy++) for (let xx = x | 0; xx < (x + w) | 0; xx++) this.p(xx, yy, k); }
-  ell(cx, cy, rx, ry, c) { const k = hex(c); for (let y = -ry; y <= ry; y++) for (let x = -rx; x <= rx; x++) if ((x * x) / (rx * rx + 0.35) + (y * y) / (ry * ry + 0.35) <= 1) this.p(cx + x, cy + y, k); }
-  line(x0, y0, x1, y1, c) { const k = hex(c); const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1); for (let i = 0; i <= n; i++) this.p(Math.round(x0 + (x1 - x0) * i / n), Math.round(y0 + (y1 - y0) * i / n), k); }
+  rect(x, y, w, h, c) { const k = hex(c), S = this.S; const X0 = Math.round(x * S), Y0 = Math.round(y * S), X1 = Math.round((x + w) * S), Y1 = Math.round((y + h) * S); for (let yy = Y0; yy < Y1; yy++) for (let xx = X0; xx < X1; xx++) this.np(xx, yy, k); }
+  ell(cx, cy, rx, ry, c) { const k = hex(c), S = this.S; const RX = rx * S + (S > 1 ? 0.5 : 0), RY = ry * S + (S > 1 ? 0.5 : 0), CX = cx * S + (S > 1 ? S / 2 - 0.5 : 0), CY = cy * S + (S > 1 ? S / 2 - 0.5 : 0); for (let y = Math.floor(-RY); y <= RY; y++) for (let x = Math.floor(-RX); x <= RX; x++) if ((x * x) / (RX * RX + 0.35) + (y * y) / (RY * RY + 0.35) <= 1) this.np(Math.round(CX + x), Math.round(CY + y), k); }
+  line(x0, y0, x1, y1, c) { const k = hex(c), S = this.S; const o = S > 1 ? S / 2 - 0.5 : 0; const X0 = x0 * S + o, Y0 = y0 * S + o, X1 = x1 * S + o, Y1 = y1 * S + o; const n = Math.max(Math.abs(X1 - X0), Math.abs(Y1 - Y0), 1); for (let i = 0; i <= n; i++) { const X = Math.round(X0 + (X1 - X0) * i / n), Y = Math.round(Y0 + (Y1 - Y0) * i / n); this.np(X, Y, k); if (S > 1) this.np(X + 1, Y, k); } }
   tex(x, y, w, h, base, amt, lo = 0.88, hi = 1.1) {
-    base = hex(base);
-    for (let yy = y; yy < y + h; yy++) for (let xx = x; xx < x + w; xx++) if (this.g(xx, yy) && this.rng.next() < amt) this.p(xx, yy, shade(base, lo + this.rng.next() * (hi - lo)));
+    base = hex(base); const S = this.S;
+    for (let yy = Math.round(y * S); yy < Math.round((y + h) * S); yy++) for (let xx = Math.round(x * S); xx < Math.round((x + w) * S); xx++) if (this.d[yy * this.w + xx] && xx >= 0 && xx < this.w && this.rng.next() < amt) this.np(xx, yy, shade(base, lo + this.rng.next() * (hi - lo)));
   }
   pad(x, y, w, h, base, curb = true) {
     this.rect(x, y, w, h, base); this.tex(x, y, w, h, base, 0.35);
@@ -45,15 +47,18 @@ export class Art {
     this.rect(x, y - h, w, d, roof);
     for (let xx = x; xx < x + w; xx++) this.p(xx, y - h, shade(roof, 1.15));
     this.rect(x, y - h + d, w, h, front);
-    for (let yy = y - h + d; yy < y + d; yy++) for (let xx = x; xx < x + w; xx++) if ((xx + yy * 3) % 7 === 0) this.p(xx, yy, shade(front, 1.06));
+    { const S = this.S; for (let yy = Math.round((y - h + d) * S); yy < Math.round((y + d) * S); yy++) for (let xx = Math.round(x * S); xx < Math.round((x + w) * S); xx++) if ((xx + yy * 3) % 7 === 0) this.np(xx, yy, shade(front, 1.06)); }
     for (let xx = x; xx < x + w; xx++) this.p(xx, y - h + d, shade(front, 0.7));
     if (o.stripe) for (let xx = x + 1; xx < x + w - 1; xx++) this.team(xx, y - h + ((d / 2) | 0));
     if (o.win) {
-      const rows = Math.max(1, ((h - 3) / 4) | 0), cols = Math.max(1, ((w - 3) / 3) | 0);
+      const S = this.S, fx = Math.round(x * S), fy = Math.round((y - h + d) * S), fw = Math.round(w * S), fh = Math.round(h * S);
+      const rows = Math.max(1, ((fh - 3) / 5) | 0), cols = Math.max(1, ((fw - 3) / 4) | 0);
       for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
-        const wx = x + 2 + c * 3, wy = y - h + d + 2 + r * 4; if (wy + 2 >= y + d) continue;
-        this.p(wx, wy, '#9fd2f0'); this.p(wx + 1, wy, '#5b8fbf'); this.p(wx, wy + 1, '#2f4d78'); this.p(wx + 1, wy + 1, '#203a5b');
-        if (o.lights && (c * 3 + r * 5 + x) % 4 !== 0) o.lights.push([wx + 1, wy + 1, 1]);
+        const wx = fx + 2 + c * 4, wy = fy + 2 + r * 5; if (wy + 3 >= fy + fh) continue;
+        const lit = (c * 3 + r * 5 + x) % 4 !== 0;
+        this.np(wx, wy, '#c9e6f8'); this.np(wx + 1, wy, '#9fd2f0'); this.np(wx, wy + 1, '#5b8fbf'); this.np(wx + 1, wy + 1, '#3f6a9a'); this.np(wx, wy + 2, '#2f4d78'); this.np(wx + 1, wy + 2, '#203a5b');
+        if (S > 1) { this.np(wx - 1, wy - 1, shade(front, 1.18)); this.np(wx + 2, wy - 1, shade(front, 1.18)); this.np(wx, wy + 3, shade(front, 1.25)); this.np(wx + 1, wy + 3, shade(front, 1.25)); }
+        if (o.lights && lit) o.lights.push([(wx + 1) / S, (wy + 1) / S, 1]);
       }
     }
     if (o.door) { const dx = x + ((w / 2) | 0) - 1; this.rect(dx, y + d - 4, 3, 4, '#2b2f3c'); this.p(dx + 2, y + d - 2, '#f7c948'); }
@@ -78,7 +83,7 @@ export class Art {
       const n = Math.max(1, ((w - 3) / 5) | 0);
       for (let c = 0; c < n; c++) {
         const wx = x + 2 + c * 5, wy = y - h + 2; if (o.door && Math.abs(wx + 1 - (x + w / 2)) < 2) continue;
-        this.rect(wx, wy, 2, 2, '#3f6a9a'); this.p(wx, wy, '#9fd2f0'); this.p(wx + 1, wy + 2, shade(wall, 1.2));
+        this.rect(wx - 0.5, wy - 0.5, 3, 3, shade(wall, 1.15)); this.rect(wx, wy, 2, 2, '#3f6a9a'); this.p(wx, wy, '#9fd2f0'); this.rect(wx, wy + 1, 2, 0.5, shade(wall, 1.15)); this.rect(wx - 0.5, wy + 2.5, 3, 0.5, shade(wall, 0.8));
         o.lights?.push([wx + 1, wy + 1, 1]);
       }
     }
@@ -106,14 +111,14 @@ export class Art {
   }
   // takım maskesi ve atlas için
   splitTeam() {
-    let any = false; const m = new Art(this.w, this.h); const T = pack(TEAMC); const base = pack([150, 160, 176]);
+    let any = false; const m = new Art(this.w, this.h, 1, 1); const T = pack(TEAMC); const base = pack([150, 160, 176]);
     for (let i = 0; i < this.d.length; i++) if (this.d[i] === T) { m.d[i] = 0xffffffff; this.d[i] = base; any = true; }
     return any ? m : null;
   }
   toImageData() { return new ImageData(new Uint8ClampedArray(this.d.buffer.slice(0)), this.w, this.h); }
   // en yakın komşu döndürme (yukarıdan görünen hava/deniz araçları)
   rotated(cos, sin) {
-    const w = this.w, h = this.h, s = Math.ceil(Math.sqrt(w * w + h * h)), out = new Art(s, s);
+    const w = this.w, h = this.h, s = Math.ceil(Math.sqrt(w * w + h * h)), out = new Art(s, s, 1, 1);
     const cx = (w - 1) / 2, cy = (h - 1) / 2, oc = (s - 1) / 2;
     for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
       const dx = x - oc, dy = y - oc; const sx = Math.round(cx + dx * cos + dy * sin), sy = Math.round(cy - dx * sin + dy * cos);
@@ -122,7 +127,7 @@ export class Art {
     return out;
   }
   // harabe dönüşümü: sütun başına kesik yükseklik, moloz, kurum
-  ruin(baseY, seed) {
+  ruin(baseY, seed) { baseY = Math.round(baseY * this.S);
     const w = this.w, h = this.h, src = this.d.slice(), r = new RNG(seed); this.d.fill(0);
     const deb = [[92, 90, 87], [43, 47, 60], [140, 100, 64], [26, 29, 40], [118, 116, 122]];
     let cut = baseY - 4;

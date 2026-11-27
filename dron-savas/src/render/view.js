@@ -7,13 +7,15 @@ import { PRGB, TEAM, P32, PAL } from '../data/palette.js';
 import { T, RD } from '../world/map.js';
 import { hash2, hash2f } from '../core/rng.js';
 import { rgba, withAlpha } from './gl.js';
-import { TerrainBaker } from './terrain.js';
+import { TerrainBaker, CHUNK_TILES } from './terrain.js';
 import { Particles, PT } from './particles.js';
-import { TILE, BUILD_TOP, DIRS, CITY_KINDS } from './sprites.js';
+import { TILE, BUILD_TOP, DIRS } from './sprites.js';
+import { BLOCK, BLOCK_KINDS } from './city.js';
 import { VIS_CELL } from '../sim/country.js';
 import { LAUNCHERS } from '../sim/missiles.js';
 
-const TS = TILE;
+const TS = TILE; const PS = TILE / 16; // efekt ölçeği
+const NATIVE2X = new Set(['jet', 'heli', 'boat', 'corvette']);
 const teamCol = (o, a = 255) => { const c = PRGB[TEAM[o % TEAM.length]] || [200, 200, 200]; return rgba(c[0], c[1], c[2], a); };
 const pcol = (k, a = 255) => { const c = PRGB[k]; return rgba(c[0], c[1], c[2], a); };
 const WHITE = 0xffffffff;
@@ -27,7 +29,7 @@ export class View {
     this.tex = renderer.createTexture(atlas.canvas);
     this.terrain = new TerrainBaker(renderer, atlas, sim.map);
     this.terrain.warFn = (a, b) => sim.atWar(a, b);
-    this.parts = new Particles(3000);
+    this.parts = new Particles(3000, PS);
     this.cam = { x: 0, y: 0, zoom: 3 };
     this.layer = 'normal'; this.quality = 1; this.time = 0;
     this.fogImg = null; this.fogTex = null; this.fogTick = -1;
@@ -37,10 +39,10 @@ export class View {
     this.stats = { sprites: 0 };
     this.labels = [];
   }
-  setQuality(q) { this.quality = q; this.parts.setCap([1500, 3000, 5000][q]); this.r.setLightScale([4, 2, 2][q]); }
+  setQuality(q) { this.quality = q; this.parts.setCap([1500, 3000, 6000][q]); this.r.setLightScale([4, 2, 2][q]); }
   visibleTo(id) {
     const e = this.sim.e, p = this.player; const o = e.owner[id];
-    if (this.spectator || o === p || this.sim.opts.fog === false) return true;
+    if (this.spectator || o === p || this.sim.opts.fog === false || this.sim.phase === 'setup') return true;
     if (o < 24 && this.sim.diplo.allied(p, o)) return true;
     return ((e.seenBy[id] >>> p) & 1) === 1;
   }
@@ -63,7 +65,8 @@ export class View {
             for (let k = 0; k < 2 + s * 3; k++) { const a = Math.random() * 6.28, sp = 15 + Math.random() * 25; P.emit(PT.DEBRIS, X, Y, 2, Math.cos(a) * sp, Math.sin(a) * sp * 0.6, 30 + Math.random() * 30, 0.7 + Math.random() * 0.5, 1, pcol('b1')); }
             if (ev.water) for (let k = 0; k < 8; k++) P.emit(PT.SPLASH, X, Y, 2, (Math.random() - 0.5) * 30, (Math.random() - 0.5) * 20, 30 + Math.random() * 30, 0.6, 1, pcol('w5'));
           } else { for (let k = 0; k < 2; k++) P.emit(PT.SMOKE, X, Y, 30, (Math.random() - 0.5) * 6, -2, 0, 1.4, 2, pcol('k4', 180)); }
-          if (onScreen(ev.x, ev.y)) { this.shake = Math.min(6, this.shake + (ev.air ? 0.5 : 1 + s * 1.5)); audio?.boom(s, ev.air); }
+          if (s >= 2 && !ev.air) { for (let k = 0; k < 10; k++) P.emit(PT.SMOKE, X + (Math.random() - 0.5) * 8, Y, 4 + k * 3, (Math.random() - 0.5) * 4, -1, 14 + k * 2, 5 + Math.random() * 3, 4 + k * 0.3, pcol(k < 4 ? 'o0' : 'k2', 220)); P.emit(PT.RING, X, Y, 0, 0, 0, 0, 0.6, 12, pcol('k7', 200)); }
+          if (onScreen(ev.x, ev.y)) { this.shake = Math.min(10, this.shake + (ev.air ? 0.5 : 1 + s * 2)); audio?.boom(s, ev.air); if (s >= 2) { this.flash = Math.max(this.flash || 0, 0.35); try { window.AndroidHost?.vibrate(60); } catch (e2) { /* yok */ } } }
           break;
         }
         case 'intercept': { const X = ev.x * TS, Y = ev.y * TS; P.emit(PT.FLASH, X, Y, (ev.z || 10) * 2, 0, 0, 0, 0.2, ev.hit ? 12 : 6, ev.hit ? pcol('l1') : pcol('k6')); if (onScreen(ev.x, ev.y)) audio?.boom(0, true); break; }
@@ -73,6 +76,7 @@ export class View {
         case 'launch': if (this.visiblePoint(ev.x, ev.y)) { const X = ev.x * TS, Y = ev.y * TS; P.emit(PT.FLASH, X, Y, 3, 0, 0, 0, 0.12, ev.big ? 10 : 5, pcol('l1')); for (let k = 0; k < (ev.big ? 8 : 3); k++) P.emit(PT.SMOKE, X, Y, 2, (Math.random() - 0.5) * 20, (Math.random() - 0.5) * 10, 3, 1.5, 3, pcol('k5', 160)); if (onScreen(ev.x, ev.y)) audio?.launch(ev.big, ev.sam); } break;
         case 'down': if (this.visiblePoint(ev.x, ev.y) && ev.kind === KIND.AIR) { const X = ev.x * TS, Y = ev.y * TS; P.emit(PT.FLASH, X, Y, (ev.z || 3) * 2, 0, 0, 0, 0.15, 5, pcol('o1')); for (let k = 0; k < 4; k++) P.emit(PT.DEBRIS, X, Y, (ev.z || 3) * 2, (Math.random() - 0.5) * 30, (Math.random() - 0.5) * 20, 10, 0.8, 1, pcol('k3')); P.emit(PT.SMOKE, X, Y, (ev.z || 3) * 2, 0, 0, -4, 1.5, 2, pcol('k2', 200)); } break;
         case 'ruin': if (this.visiblePoint(ev.x, ev.y)) { for (let k = 0; k < (ev.big ? 20 : 10); k++) P.emit(PT.SMOKE, ev.x * TS + (Math.random() - 0.5) * 20, ev.y * TS + (Math.random() - 0.5) * 14, 2, (Math.random() - 0.5) * 10, -3, 8, 3 + Math.random() * 2, 4, pcol('k1', 220)); if (onScreen(ev.x, ev.y)) audio?.boom(2, false); } break;
+        case 'chain': if (this.visiblePoint(ev.x, ev.y)) { this.flash = Math.max(this.flash || 0, 0.5); this.shake = 10; for (let k = 0; k < 20; k++) { const a = Math.random() * 6.28, sp = 30 + Math.random() * 60; P.emit(PT.DEBRIS, ev.x * TS, ev.y * TS, 4, Math.cos(a) * sp, Math.sin(a) * sp * 0.6, 50 + Math.random() * 40, 1.2, 1.5, pcol('k2')); } audio?.boom(2, false); } break;
         case 'release': P.emit(PT.FLASH, ev.x * TS, ev.y * TS, 20, 0, 0, 0, 0.1, 4, pcol('k7')); break;
         case 'season': this.terrain.setSeason(ev.season); break;
         case 'built': case 'repaired': this.houses.clear(); break;
@@ -81,33 +85,36 @@ export class View {
     }
   }
   visiblePoint(x, y) {
-    if (this.spectator || this.sim.opts.fog === false) return true;
+    if (this.spectator || this.sim.opts.fog === false || this.sim.phase === 'setup') return true;
     const co = this.sim.countries[this.player]; const cx = (x / VIS_CELL) | 0, cy = (y / VIS_CELL) | 0;
     if (cx < 0 || cy < 0 || cx >= co.vw || cy >= co.vh) return false;
     return co.visNow[cy * co.vw + cx] > 0;
   }
 
-  // -------- şehir evleri (deterministik yerleşim) --------
-  cityHouses(id) {
-    const e = this.sim.e, map = this.sim.map; const R = e.prog[id] | 0; let h = this.houses.get(id);
-    if (h && h.R === R && h.v === map.version >> 6) return h.list;
-    const list = []; const cx = e.x[id] | 0, cy = e.y[id] | 0; const info = this.sim.cityInfo.get(id);
-    for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
-      const x = cx + dx, y = cy + dy; if (!map.inb(x, y) || !map.inb(x, y - 1)) continue;
-      const d2 = dx * dx + dy * dy; if (d2 > R * R) continue;
-      const i = y * map.W + x; if (!map.isLand(i) || map.road[i] || map.occ[i] || map.ter[i] === T.MOUNTAIN || map.ter[i] === T.PEAK) continue;
-      const hh = hash2(x, y, info.seed); const ratio = d2 / (R * R + 1);
-      if ((hh & 255) / 255 > 0.5 - ratio * 0.3) continue;
-      if (((x + y) & 1) && ratio > 0.15) continue; // sokak dokusu: seyrek yerleşim
-      if (map.occ[i - map.W]) continue;
-      const r2 = ((hh >>> 8) & 255) / 255; let kind;
-      if (ratio < 0.12 && R >= 4) kind = r2 < 0.45 ? 'office' : 'apartment';
-      else if (ratio < 0.35) kind = r2 < 0.5 ? 'apartment' : r2 < 0.75 ? 'shop' : 'rowhouse';
-      else kind = r2 < 0.68 ? 'house' : r2 < 0.8 ? 'rowhouse' : r2 < 0.87 ? 'shop' : r2 < 0.93 ? 'park' : r2 < 0.97 ? 'school' : 'gas';
-      list.push([x, y, hh, kind, (hh >>> 16) % CITY_KINDS[kind]]);
+  // -------- şehir adaları: 3x3 karoluk kare adalar, merkezde ofis/çarşı, dışta konut --------
+  cityBlocks(id) {
+    const e = this.sim.e, map = this.sim.map; const R = e.prog[id] | 0; const h = this.houses.get(id);
+    if (h && h.R === R && h.v === map.version >> 6 && h.o === e.owner[id]) return h.list;
+    const list = []; const cx = e.x[id] | 0, cy = e.y[id] | 0; const info = this.sim.cityInfo.get(id); const own = e.owner[id];
+    const K = Math.ceil(R / BLOCK) + 1;
+    for (let j = -K; j <= K; j++) for (let i = -K; i <= K; i++) {
+      const X = cx - 1 + i * BLOCK, Y = cy - 1 + j * BLOCK; const d = Math.hypot(i, j) * BLOCK;
+      if (d > R + 0.5) continue;
+      let ok = true;
+      for (let yy = Y; yy < Y + BLOCK && ok; yy++) for (let xx = X; xx < X + BLOCK; xx++) {
+        if (!map.inb(xx, yy)) { ok = false; break; } const t = yy * map.W + xx;
+        if (!map.isLand(t) || map.occ[t] || map.res[t] || map.ter[t] === T.MOUNTAIN || map.ter[t] === T.PEAK || map.owner[t] !== own) { ok = false; break; }
+      }
+      if (!ok) continue;
+      const hh = hash2(X, Y, info.seed); const r2 = (hh & 255) / 255; const ring = d / Math.max(1, R);
+      let kind;
+      if (ring < 0.2) kind = r2 < 0.65 ? 'office' : 'market';
+      else if (ring < 0.55) kind = r2 < 0.6 ? 'apartments' : r2 < 0.75 ? 'office' : r2 < 0.88 ? 'market' : 'school';
+      else kind = r2 < 0.7 ? 'houses' : r2 < 0.85 ? 'park' : r2 < 0.93 ? 'school' : 'apartments';
+      list.push([X, Y, hh, kind, (hh >>> 8) % BLOCK_KINDS[kind]]);
     }
     list.sort((a, b) => a[1] - b[1]);
-    this.houses.set(id, { R, v: map.version >> 6, list });
+    this.houses.set(id, { R, v: map.version >> 6, o: own, list });
     return list;
   }
 
@@ -118,6 +125,7 @@ export class View {
     if (this.terrain.season !== env.season) this.terrain.setSeason(env.season);
     if (map.dirtyChunks.size) { this.terrain.invalidate(map.dirtyChunks); map.dirtyChunks.clear(); }
     const z = this.cam.zoom;
+    if (z < 1) { this.drawOverview(dt); return; } // stratejik harita (tüm haritayı görme)
     let sx = 0, sy = 0; if (this.shake > 0.1) { sx = (Math.random() - 0.5) * this.shake; sy = (Math.random() - 0.5) * this.shake; this.shake *= 0.86; }
     r.setView(Math.round((this.cam.x + sx) * z) / z, Math.round((this.cam.y + sy) * z) / z, z);
     r.clear(0.06, 0.12, 0.22);
@@ -125,16 +133,17 @@ export class View {
     this.view = { x0, y0, x1, y1 };
     // 1) arazi
     const budget = { n: this.quality >= 2 ? 3 : 2 };
-    const cx0 = Math.max(0, Math.floor(x0 / 512)), cy0 = Math.max(0, Math.floor(y0 / 512));
-    const cx1 = Math.min(Math.ceil(map.W / 32) - 1, Math.floor(x1 / 512)), cy1 = Math.min(Math.ceil(map.H / 32) - 1, Math.floor(y1 / 512));
+    const CPX = CHUNK_TILES * TS;
+    const cx0 = Math.max(0, Math.floor(x0 / CPX)), cy0 = Math.max(0, Math.floor(y0 / CPX));
+    const cx1 = Math.min(Math.ceil(map.W / CHUNK_TILES) - 1, Math.floor(x1 / CPX)), cy1 = Math.min(Math.ceil(map.H / CHUNK_TILES) - 1, Math.floor(y1 / CPX));
     // önce merkeze yakın chunk'lar pişsin
     const order = [];
-    for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) order.push([cx, cy, Math.abs(cx * 512 + 256 - this.cam.x) + Math.abs(cy * 512 + 256 - this.cam.y)]);
+    for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) order.push([cx, cy, Math.abs(cx * CPX + CPX / 2 - this.cam.x) + Math.abs(cy * CPX + CPX / 2 - this.cam.y)]);
     order.sort((a, b) => a[2] - b[2]);
     for (const [cx, cy] of order) {
       const t = this.terrain.get(cx, cy, budget);
-      if (t) r.quad(t, 0, 0, 512, 512, cx * 512, cy * 512, 512, 512, WHITE);
-      else r.quad(this.tex, A.white.x, A.white.y, 1, 1, cx * 512, cy * 512, 512, 512, pcol('g2'));
+      if (t) r.quad(t, 0, 0, CPX, CPX, cx * CPX, cy * CPX, CPX, CPX, WHITE);
+      else r.quad(this.tex, A.white.x, A.white.y, 1, 1, cx * CPX, cy * CPX, CPX, CPX, pcol('g2'));
     }
     // 2) toplama + kesme
     const pad = 64;
@@ -153,7 +162,7 @@ export class View {
     for (const c of cities) {
       if (!this.spectator && e.owner[c] !== this.player && !this.sim.countries[this.player].known.has(c) && !this.visibleTo(c)) continue;
       const hp = e.hp[c] / e.maxhp[c];
-      for (const [hx, hy, hh, kind, v] of this.cityHouses(c)) ground.push([(hy + 1) * TS, 2, c, hx, hy, hh, kind, hp, v]);
+      for (const [bx, by, hh, kind, v] of this.cityBlocks(c)) ground.push([(by + BLOCK) * TS, 2, c, bx, by, hh, kind, hp, v]);
     }
     ground.sort((a, b) => a[0] - b[0]);
     // 3) gölgeler
@@ -177,7 +186,7 @@ export class View {
     // 7) ışık haritası
     if (dl < 0.97 && this.quality >= 0) this.drawLights(ground, air, projs, dl);
     // 8) savaş sisi
-    if (!this.spectator && this.sim.opts.fog !== false) this.drawFog();
+    if (!this.spectator && this.sim.opts.fog !== false && this.sim.phase !== 'setup') this.drawFog();
     // 9) katmanlar ve arayüz öğeleri (dünya uzayı)
     this.drawLayer();
     this.drawSelection(alpha);
@@ -185,6 +194,55 @@ export class View {
     this.drawWeather(dt);
     r.end();
     this.stats.sprites = spr;
+  }
+  // ---- stratejik genel bakış: karo başına 1 piksel doku (arazi + yamaç + sınır + yol + şehir + yangın) ----
+  buildOverview() {
+    const map = this.sim.map, W = map.W, H = map.H, sim = this.sim;
+    if (!this.ovImg) { this.ovImg = new ImageData(W, H); this.ovData = new Uint32Array(this.ovImg.data.buffer); }
+    const d = this.ovData, ter = map.ter, hg = map.height, own = map.owner;
+    const TC = ['w1', 'w2', 's1', 'g3', 'g1', 'm1', 'g4', 'r2', 'n1', 'w3', 'w3'].map((k) => PRGB[k]);
+    const season = sim.env.season; const snow = season === 3, dry = season === 1, aut = season === 2;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const i = y * W + x; const t = ter[i]; let [r, g, b] = TC[t];
+      if (t >= 3 && t <= 7) { if (snow) { r = r * 0.3 + 160; g = g * 0.3 + 170; b = b * 0.3 + 180; } else if (dry && t === 3) { r += 30; g += 10; } else if (aut && (t === 3 || t === 4)) { r += 40; g -= 10; } }
+      if (map.isLand(i) && x > 0 && y > 0) { const sh = 1 + (hg[i - W - 1] - hg[i]) * 7; r *= sh; g *= sh; b *= sh; }
+      if (map.res[i]) { const rc = [0, [200, 110, 60], [30, 30, 36], [10, 10, 14], [150, 190, 230], [230, 130, 50], [190, 240, 80], [170, 110, 220]][map.res[i]]; r = rc[0]; g = rc[1]; b = rc[2]; }
+      if (map.road[i]) { r = g = b = map.road[i] & 8 ? 60 : 120; }
+      if (map.cityTile[i]) { r = 200; g = 190; b = 170; }
+      if (map.burnt[i]) { r *= 0.35; g *= 0.33; b *= 0.3; }
+      if (map.fire[i]) { r = 255; g = 120; b = 30; }
+      const o = own[i];
+      if (o !== 255) {
+        const tc = PRGB[TEAM[o % TEAM.length]]; const edge = (x < W - 1 && own[i + 1] !== o) || (y < H - 1 && own[i + W] !== o) || (x > 0 && own[i - 1] !== o) || (y > 0 && own[i - W] !== o);
+        if (edge) { r = tc[0]; g = tc[1]; b = tc[2]; } else { r = r * 0.72 + tc[0] * 0.28; g = g * 0.72 + tc[1] * 0.28; b = b * 0.72 + tc[2] * 0.28; }
+      }
+      d[i] = (255 << 24 | Math.min(255, b) << 16 | Math.min(255, g) << 8 | Math.min(255, r)) >>> 0;
+    }
+    if (!this.ovTex) this.ovTex = this.r.createTexture(this.ovImg, true);
+    else this.r.updateTexture(this.ovTex, this.r.kind === 'webgl2' ? this.ovImg : (this.ovCv || (this.ovCv = document.createElement('canvas')), this.ovCv.width = W, this.ovCv.height = H, this.ovCv.getContext('2d').putImageData(this.ovImg, 0, 0), this.ovCv));
+    if (this.r.kind !== 'webgl2' && !this.ovCv) { this.ovCv = document.createElement('canvas'); this.ovCv.width = W; this.ovCv.height = H; this.ovCv.getContext('2d').putImageData(this.ovImg, 0, 0); this.r.updateTexture(this.ovTex, this.ovCv); }
+    this.ovVer = map.version; this.ovT = this.time;
+  }
+  drawOverview(dt) {
+    const r = this.r, sim = this.sim, e = sim.e, map = sim.map, A = this.A, z = this.cam.zoom;
+    if (!this.ovTex || (map.version !== this.ovVer && this.time - this.ovT > 1.5) || (sim.fireTiles.length && this.time - this.ovT > 1)) this.buildOverview();
+    r.setView(this.cam.x, this.cam.y, z); r.clear(0.06, 0.12, 0.22);
+    const vw = r.W / z, vh = r.H / z; this.view = { x0: this.cam.x - vw / 2, y0: this.cam.y - vh / 2, x1: this.cam.x + vw / 2, y1: this.cam.y + vh / 2 };
+    r.quad(this.ovTex, 0, 0, map.W, map.H, 0, 0, map.W * TS, map.H * TS, WHITE);
+    if (!this.spectator && sim.opts.fog !== false && sim.phase !== 'setup') this.drawFog();
+    // ögeler: ekranda sabit boyutlu işaretler
+    const px = 1 / z; const mark = (x, y, s, col) => r.quad(this.tex, A.white.x, A.white.y, 1, 1, x * TS - s * px / 2, y * TS - s * px / 2, s * px, s * px, col);
+    for (let i = 0; i < e.hi; i++) {
+      const k = e.kind[i]; if (!k || (e.flags[i] & F.DEAD) || k === KIND.PROJ) continue;
+      if (k === KIND.CITY) { if (this.spectator || sim.opts.fog === false || e.owner[i] === this.player || this.sim.countries[this.player].known.has(i)) { mark(e.x[i], e.y[i], 14, pcol('k0')); mark(e.x[i], e.y[i], 10, e.flags[i] & F.CAPITAL ? pcol('l0') : pcol('k7')); } continue; }
+      if (!this.visibleTo(i) && !(k === KIND.BUILDING && this.knownBuilding(i))) continue;
+      const o = e.owner[i]; if (o >= 24) continue;
+      if (k === KIND.BUILDING) mark(e.x[i], e.y[i], 4, teamCol(o));
+      else { mark(e.x[i], e.y[i], 6, pcol('k0')); mark(e.x[i], e.y[i], 4, o === this.player ? pcol('k7') : this.sim.atWar(this.player, o) ? pcol('e2') : teamCol(o)); }
+    }
+    this.drawSelection(1);
+    this.drawWeather(dt);
+    r.end();
   }
   knownBuilding(i) { const co = this.sim.countries[this.player]; return co.known.has(i); }
 
@@ -232,10 +290,10 @@ export class View {
     r.quad(this.tex, A.white.x, A.white.y, 1, 1, x, y, Math.max(1, w * p), 2, col);
   }
   drawHouse(g) {
-    const r = this.r, A = this.A; const [, , , hx, hy, hh, kind, hp, v] = g;
-    const ruined = ((hh >>> 9) & 255) / 255 > hp + 0.05;
-    const f = A.get(`c:${kind}:${v}:${ruined ? 2 : 0}`); if (!f) return;
-    r.quad(this.tex, f.x, f.y, f.w, f.h, hx * TS + ((TS - f.w) >> 1), (hy + 1) * TS - f.h, f.w, f.h, WHITE);
+    const r = this.r, A = this.A; const [, , , bx, by, hh, kind, hp, v] = g;
+    const ruined = ((hh >>> 16) & 255) / 255 > hp + 0.05;
+    const f = A.get(`blk:${kind}:${v}:${ruined ? 1 : 0}`); if (!f) return;
+    r.quad(this.tex, f.x, f.y, f.w, f.h, bx * TS, (by + BLOCK) * TS - f.h, f.w, f.h, WHITE);
   }
   drawGroundUnit(i, px, py, shOn) {
     const e = this.sim.e, r = this.r, A = this.A, u = UNITS[e.def[i]], o = e.owner[i];
@@ -268,13 +326,13 @@ export class View {
   }
   drawAir(i, px, py, alpha, shOn) {
     const e = this.sim.e, r = this.r, A = this.A, u = UNITS[e.def[i]], o = e.owner[i];
-    const zz = (e.pz[i] + (e.z[i] - e.pz[i]) * alpha) * 2;
+    const zz = (e.pz[i] + (e.z[i] - e.pz[i]) * alpha) * 2 * PS;
     const gen = GEN_DIR[u.spr];
     const dir = ((Math.round(Math.atan2(e.vy[i], e.vx[i]) / (Math.PI * 2) * DIRS) % DIRS) + DIRS) % DIRS;
     let f, m, flip = false;
     if (gen) { f = A.get(`gen:${gen}:${dir}`); m = A.get(`gen:${gen}:${dir}:m`); }
     else { f = A.get(u.spr); flip = e.vx[i] < 0; }
-    const s = u.sz === 2 ? 1 : 1; const w = f.w * s, h = f.h * s;
+    const s = NATIVE2X.has(gen) ? 1 : PS; const w = f.w * s, h = f.h * s;
     if (shOn && e.kind[i] === KIND.AIR) r.quad(this.tex, f.x, f.y, f.w, f.h, px - w / 2 + zz * 0.35, py - h / 2 + zz * 0.25, w, h, rgba(0, 0, 0, 50), flip);
     const ty = py - zz;
     if (gen) { r.quad(this.tex, f.x, f.y, f.w, f.h, px - w / 2, ty - h / 2, w, h, WHITE); if (m) r.quad(this.tex, m.x, m.y, m.w, m.h, px - w / 2, ty - h / 2, w, h, teamCol(o)); }
@@ -288,12 +346,12 @@ export class View {
   drawProj(i, px, py, alpha) {
     const e = this.sim.e, r = this.r, A = this.A, p = PROJS[e.def[i]];
     if (e.timer[i] <= 0) return;
-    const zz = (e.pz[i] + (e.z[i] - e.pz[i]) * alpha) * 2;
+    const zz = (e.pz[i] + (e.z[i] - e.pz[i]) * alpha) * 2 * PS;
     const vx = e.vx[i], vy = e.vy[i] - (p.arc ? (1 - 2 * e.prog[i]) * 0.4 : 0);
     const dir = ((Math.round(Math.atan2(vy, vx) / (Math.PI * 2) * DIRS) % DIRS) + DIRS) % DIRS;
     const nm = p.intercept ? 'intc' : p.id === 'cruise' || p.id === 'antiship' || p.id === 'arm' ? 'cruise' : p.id === 'ballistic' ? 'ballistic' : p.id === 'bomb' ? 'bomb' : 'rocket';
     const f = A.get(`gen:${nm}:${dir}`);
-    r.quad(this.tex, f.x, f.y, f.w, f.h, px - f.w / 2, py - zz - f.h / 2, f.w, f.h, WHITE);
+    r.quad(this.tex, f.x, f.y, f.w, f.h, px - f.w * PS / 2, py - zz - f.h * PS / 2, f.w * PS, f.h * PS, WHITE);
     // iz
     if (Math.random() < (this.quality + 1) / 3 && p.id !== 'bomb') this.parts.emit(PT.TRAIL, px - vx * 4, py - zz - vy * 4, 0, (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3, 0, p.intercept ? 0.5 : 0.9, 1.5, p.intercept ? pcol('k7', 200) : pcol('k6', 180));
     // gelen füze uyarı çizgisi (oyuncu toprağına)
@@ -324,6 +382,15 @@ export class View {
   emitAmbient(dt, ground, air) {
     const e = this.sim.e, P = this.parts, A = this.A, env = this.sim.env;
     const rate = dt * [0.6, 1, 1.6][this.quality];
+    // yanan karolar: alev ve rüzgârla sürüklenen duman
+    const { x0, y0, x1, y1 } = this.view; const map = this.sim.map; this.fireVis = [];
+    for (const ti of this.sim.fireTiles) {
+      const fx = (ti % map.W) * TS, fy = ((ti / map.W) | 0) * TS; if (fx < x0 - TS || fx > x1 || fy < y0 - TS || fy > y1 + TS) continue;
+      const inten = map.fire[ti] / 100; this.fireVis.push(fx, fy, inten);
+      if (Math.random() < rate * 14 * inten) P.emit(PT.FIRE, fx + Math.random() * TS, fy + TS * 0.4 + Math.random() * TS * 0.6, 1, (Math.random() - 0.5) * 2, -10, 6, 0.4 + Math.random() * 0.4, 1.4, WHITE);
+      if (Math.random() < rate * 3 * inten) P.emit(PT.SMOKE, fx + Math.random() * TS, fy + Math.random() * TS * 0.5, 6, env.windX * 6, -6, 10, 3 + Math.random() * 3, 3, Math.random() < 0.5 ? pcol('k1', 200) : pcol('k2', 190));
+      if (Math.random() < rate * 2 * inten) P.emit(PT.SPARK, fx + Math.random() * TS, fy + TS * 0.5, 4, (Math.random() - 0.5) * 20, -10, 30, 0.6, 1, pcol('o1'));
+    }
     for (const g of ground) {
       if (g[1] !== 0) continue; const i = g[2];
       if (!this.visibleTo(i)) continue;
@@ -348,11 +415,11 @@ export class View {
       const o = i * 13; const x = d[o], y = d[o + 1] - d[o + 2], life = d[o + 6] / d[o + 7], sz = d[o + 8], t = d[o + 9]; const col = P.col[i];
       switch (t) {
         case PT.SMOKE: case PT.STEAM: { const f = puff[Math.min(3, (sz / 2) | 0)]; const s = f.w * (0.6 + sz * 0.15); r.quad(this.tex, f.x, f.y, f.w, f.h, x - s / 2, y - s / 2, s, s, withAlpha(col, (col >>> 24) * Math.min(1, life * 1.5))); break; }
-        case PT.FIRE: { const f = fire[(i + (this.time * 12 | 0)) % 3]; r.quad(this.tex, f.x, f.y, f.w, f.h, x - 2, y - 5, 5, 7, withAlpha(WHITE, 255 * Math.min(1, life * 2))); break; }
-        case PT.SPARK: case PT.DEBRIS: case PT.SPLASH: case PT.TRAIL: { const s = t === PT.TRAIL ? 1 + (1 - life) * 2 : 1; const f = t === PT.TRAIL ? puff[0] : A.white; r.quad(this.tex, f.x, f.y, f.w, f.h, x - s / 2, y - s / 2, s, s, withAlpha(col, (col >>> 24) * Math.min(1, life * 1.4))); break; }
+        case PT.FIRE: { const f = fire[(i + (this.time * 12 | 0)) % 3]; r.quad(this.tex, f.x, f.y, f.w, f.h, x - 2 * PS, y - 5 * PS, 5 * PS, 7 * PS, withAlpha(WHITE, 255 * Math.min(1, life * 2))); break; }
+        case PT.SPARK: case PT.DEBRIS: case PT.SPLASH: case PT.TRAIL: { const s = (t === PT.TRAIL ? 1 + (1 - life) * 2 : 1) * PS; const f = t === PT.TRAIL ? puff[0] : A.white; r.quad(this.tex, f.x, f.y, f.w, f.h, x - s / 2, y - s / 2, s, s, withAlpha(col, (col >>> 24) * Math.min(1, life * 1.4))); break; }
         case PT.FLASH: { const s = sz * (1.2 - life * 0.4); r.quad(this.tex, flash.x, flash.y, flash.w, flash.h, x - s / 2, y - s / 2, s, s, withAlpha(col, 255 * life)); break; }
         case PT.RING: { const s = sz * 2 + (1 - life) * sz * 5; r.quad(this.tex, ring.x, ring.y, ring.w, ring.h, x - s / 2, y - s / 2 * 0.7, s, s * 0.7, withAlpha(col, (col >>> 24) * life)); break; }
-        case PT.TRACER: case PT.LASER: { const k = t === PT.LASER ? 1.6 : 0.8; this.line(x, y, P.x2[i], P.y2[i], k, withAlpha(col, 255 * life)); break; }
+        case PT.TRACER: case PT.LASER: { const k = (t === PT.LASER ? 1.6 : 0.8) * PS; this.line(x, y, P.x2[i], P.y2[i], k, withAlpha(col, 255 * life)); break; }
       }
     }
   }
@@ -369,19 +436,21 @@ export class View {
         const bd = BUILDINGS[e.def[i]]; const f = A.get(`b:${bd.id}:0`);
         const ruined = e.flags[i] & F.RUINED;
         const bx = e.ox[i] * TS, by = e.oy[i] * TS - BUILD_TOP;
-        if (e.flags[i] & F.BURNING) L(bx + bd.size[0] * 8, by + BUILD_TOP + bd.size[1] * 8, 22 + bd.size[0] * 6, rgba(255, 120, 40, 200));
+        if (e.flags[i] & F.BURNING) L(bx + bd.size[0] * TS / 2, by + BUILD_TOP + bd.size[1] * TS / 2, (22 + bd.size[0] * 6) * PS, rgba(255, 120, 40, 200));
         if (ruined || !(e.flags[i] & F.POWERED) || !f || !f.meta) continue;
-        for (const [lx, ly, k] of f.meta.lights) L(bx + lx, by + ly, k === 3 ? 14 : k === 2 ? 7 : 5, k === 2 ? (bd.id === 'airbase' ? blue : red) : k === 3 ? rgba(255, 140, 50, 220) : win);
+        for (const [lx, ly, k] of f.meta.lights) L(bx + lx, by + ly, (k === 3 ? 14 : k === 2 ? 7 : 5) * PS, k === 2 ? (bd.id === 'airbase' ? blue : red) : k === 3 ? rgba(255, 140, 50, 220) : win);
       } else if (g[1] === 2) {
         const c = g[2]; if (!(e.flags[c] & F.POWERED)) continue; // elektriksiz şehir karanlık
-        const [, , , hx, hy, hh, kind, , v] = g; const f = A.get(`c:${kind}:${v}:0`); if (!f) continue;
-        const ox = hx * TS + ((TS - f.w) >> 1), oy = (hy + 1) * TS - f.h;
-        for (let k = 0; k < f.lights.length; k += 2) { const [lx, ly] = f.lights[k]; L(ox + lx, oy + ly, 5, win); }
-        if ((hh & 15) === 5) L(hx * TS + 15, hy * TS + 15, 16, lamp);
+        const [, , , bx, by, hh, kind, , v] = g; const f = A.get(`blk:${kind}:${v}:0`); if (!f) continue;
+        const ox = bx * TS, oy = (by + BLOCK) * TS - f.h;
+        for (let k = 0; k < f.lights.length; k++) { const [lx, ly] = f.lights[k]; L(ox + lx, oy + ly, 6, win); }
+        for (const [lx, ly] of [[4, f.h - 4], [f.w - 4, f.h - 4], [4, f.h - BLOCK * TS + 4], [f.w - 4, f.h - BLOCK * TS + 4]]) L(ox + lx, oy + ly, 22, lamp); // sokak lambaları
       }
     }
-    for (const [i, px, py] of projs) { const zz = e.z[i] * 2; L(px, py - zz, 10, rgba(255, 170, 80, 220)); }
-    for (const [i, px, py] of air) if (((this.time * 2 + i) | 0) % 2) L(px, py - e.z[i] * 2, 4, red);
+    for (const [i, px, py] of projs) { const zz = e.z[i] * 2 * PS; L(px, py - zz, 10 * PS, rgba(255, 170, 80, 220)); }
+    for (const [i, px, py] of air) if (((this.time * 2 + i) | 0) % 2) L(px, py - e.z[i] * 2 * PS, 4 * PS, red);
+    // yangın ışıkları
+    if (this.fireVis) for (let k = 0; k < this.fireVis.length; k += 3) { const fl = 0.8 + Math.sin(this.time * 9 + k) * 0.2; L(this.fireVis[k] + TS / 2, this.fireVis[k + 1] + TS / 2, 40 * this.fireVis[k + 2] * fl, rgba(255, 120, 40, 200)); }
     // parçacık ışıkları
     const P = this.parts, d = P.d;
     for (let k = 0; k < P.n; k++) {
@@ -493,6 +562,7 @@ export class View {
     if (w === 'fog') r.quad(this.tex, A.white.x, A.white.y, 1, 1, 0, 0, W, H, rgba(200, 205, 215, Math.round(85 * env.intensity + 30)));
     if (w === 'storm' || w === 'rain') r.quad(this.tex, A.white.x, A.white.y, 1, 1, 0, 0, W, H, rgba(30, 40, 60, 40));
     if (w === 'storm' && Math.random() < dt * 0.25) this.lightning = 0.25;
+    if (this.flash > 0) { r.quad(this.tex, A.white.x, A.white.y, 1, 1, 0, 0, W, H, rgba(255, 240, 200, Math.round(this.flash * 255))); this.flash -= dt * 1.5; }
     if (this.lightning > 0) { this.lightning -= dt; r.quad(this.tex, A.white.x, A.white.y, 1, 1, 0, 0, W, H, rgba(230, 235, 255, Math.round(this.lightning * 400))); }
     if (w === 'rain' || w === 'storm' || w === 'snow') {
       const n = Math.round([200, 450, 800][this.quality] * (0.5 + env.intensity * 0.5));

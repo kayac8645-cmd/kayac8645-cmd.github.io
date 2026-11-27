@@ -132,3 +132,8 @@ input[type=range] { width: 100%; height: 40px; }
 .cinfo .ico { height: 12px; margin: 0 1px 0 0; }
 .ccost.lock { color: var(--warn); }
 .ctx-title .ico { max-height: 36px; }
+.hub { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.hubbtn { min-height: 72px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 14px; }
+.hubic { font-size: 24px; }
+.resrow .ico { height: 24px; }
+.resrow.neg { border-left: 4px solid var(--bad); }

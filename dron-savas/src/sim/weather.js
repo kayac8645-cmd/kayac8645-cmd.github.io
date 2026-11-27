@@ -14,7 +14,7 @@ export function initEnv(sim) {
 }
 export function updateWeather(sim) {
   const env = sim.env;
-  const m = sim.tick + START_MIN;
+  const m = sim.tick - (sim.setupTicks || 0) + START_MIN;
   env.minute = m; env.day = Math.floor(m / TICKS_PER_DAY); env.hour = (m % TICKS_PER_DAY) / 60;
   const season = Math.floor(env.day / DAYS_PER_SEASON) % 4;
   if (season !== env.season) { env.season = season; sim.emit({ k: 'season', season }); sim.map.version++; }

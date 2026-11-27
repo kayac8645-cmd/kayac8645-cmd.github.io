@@ -47,8 +47,8 @@ function freeDeposit(sim, c, res, cx, cy) {
 export function planEconomy(sim, brain, c, cs) {
   const co = sim.countries[c], e = sim.e; const cap = brain.home; const n = (id) => cs.cnt[id] || 0;
   // para fazlası -> eksik malzemeyi ithal et
-  if (co.money > 5000) for (const [res, low, amt] of [['steel', 60, 60], ['electronics', 30, 30], ['supply', 40, 60], ['fuel', 40, 60], ['composite', 20, 20], ['explosives', 25, 30], ['coal', 40, 60], ['iron', 30, 40], ['copper', 20, 30]]) {
-    if (co.res[R[res]] < low && co.money > 3000 + amt * 60) sim.issue({ type: CMD.MARKET, c, res, amt });
+  if (co.money > 2500) for (const [res, low, amt] of [['steel', 60, 60], ['electronics', 30, 30], ['supply', 40, 60], ['fuel', 40, 60], ['composite', 20, 20], ['explosives', 25, 30], ['coal', 40, 60], ['iron', 30, 40], ['copper', 20, 30]]) {
+    if (co.res[R[res]] < low && co.money > 1500 + amt * 50) sim.issue({ type: CMD.MARKET, c, res, amt: Math.round(amt / 2) });
   }
   const p = brain.p; let builds = 0; const maxB = brain.diff.buildPer + (co.money > 12000 ? 1 : 0);
   const under = () => { let k = 0; e.each(C.BUILDING, (i) => { if (e.owner[i] === c && (e.flags[i] & F.BUILDING)) k++; }); return k; };
@@ -56,12 +56,19 @@ export function planEconomy(sim, brain, c, cs) {
   const B_ = (id, x = cap[0], y = cap[1], r = 18, dep = false) => { if (builds >= maxB) return true; if (tryBuild(sim, brain, c, id, x, y, r, dep)) { builds++; return true; } return false; };
   // 1) enerji dengesi
   const ps = co.power.supply, pd = co.power.demand;
+  // yakıt durumuna göre santral: kömür madeni/stoku yoksa gaz, o da yoksa güneş (yakıtsız)
+  const coalMine = (cs.list.mine || []).some((i) => e.res[i] === 2);
+  const gasWell = (cs.list.well || []).some((i) => e.res[i] === 4);
+  const coalOK = coalMine || co.res[R.coal] > 150, gasOK = gasWell || co.res[R.gas] > 80;
   if (ps < pd * 1.15 + 25) {
-    if (sim.has(c, 'p_nuclear') && co.res[R.uranium] > 20 && n('nuclear') < 1) B_('nuclear', cap[0] + 10, cap[1] + 6, 26);
-    else if (co.res[R.gas] > 15 && n('gas_plant') < 3) B_('gas_plant', cap[0] - 8, cap[1] + 8, 24);
-    else if (sim.has(c, 'p_solar') && n('solar') < 6) B_('solar', cap[0] + 8, cap[1] - 8, 24);
-    else B_('coal_plant', cap[0] + 9, cap[1] + 2, 26);
+    if (co.res[R.uranium] > 40 && n('nuclear') < 1 && co.money > 12000) B_('nuclear', cap[0] + 10, cap[1] + 6, 26);
+    else if (gasOK && n('gas_plant') < 3) B_('gas_plant', cap[0] - 8, cap[1] + 8, 24);
+    else if (coalOK && n('coal_plant') < 3) B_('coal_plant', cap[0] + 9, cap[1] + 2, 26);
+    else B_('solar', cap[0] + 8, cap[1] - 8, 24);
   }
+  if (ps < pd * 0.9 && co.money < 4000) return; // elektrik açığı: önce santral için para biriktir
+  // kömürü biten santral için acil ithalat
+  if (n('coal_plant') && !coalMine && co.res[R.coal] < 25 && co.money > 400) sim.issue({ type: CMD.MARKET, c, res: 'coal', amt: Math.min(40, Math.floor(co.money / 12)) });
   // her şehrin yakınında trafo
   e.each(C.CITY, (i) => { if (e.owner[i] !== c || builds >= maxB) return; if (!(e.flags[i] & F.POWERED) && sim.tick % 3 === 0) B_('substation', e.x[i] + 2, e.y[i] + 2, 8); });
   // 2) madenler
@@ -75,9 +82,13 @@ export function planEconomy(sim, brain, c, cs) {
     if (have < k) { const dep = freeDeposit(sim, c, res, cap[0], cap[1]); if (dep) B_('well', dep[0], dep[1], 1, true); }
   }
   // 3) sanayi zinciri
+  // şehir kurma: kaynak bölgelerine doğru sınırı genişlet
+  const nCities = (() => { let k = 0; e.each(C.CITY, (i) => { if (e.owner[i] === c) k++; }); return k; })();
+  const wantCities = Math.min(6, 1 + Math.floor(sim.tick / 2500) + (p.industry > 0.7 ? 1 : 0));
+  if (nCities + (cs.cnt.city_found || 0) < wantCities && co.money > 3300) foundCityToward(sim, brain, c, cap);
   const seq = [
-    ['depot', 1], ['steel_mill', 2], ['refinery', 1], ['electronics', 1], ['munitions', 1], ['drone_fac', 1], ['research', 1], ['radar', 1],
-    ['vehicle_fac', 1], ['steel_mill', 2], ['missile_fac', 1], ['pump', 1], ['relay', 2], ['research', 2], ['drone_base', 2],
+    ['depot', 1], ['barracks', 1], ['steel_mill', 1], ['substation', 1], ['drone_base', 1], ['refinery', 1], ['electronics', 1], ['munitions', 1], ['drone_fac', 1], ['radar', 1],
+    ['textile', 1], ['food', 1], ['vehicle_fac', 1], ['steel_mill', 2], ['missile_fac', 1], ['pump', 1], ['fire_station', 1], ['appliance', 1], ['relay', 2], ['drone_base', 2], ['auto', 1],
     ['electronics', 2], ['aa_gun', 3], ['jammer', 1], ['sigint', 1], ['radar', 2], ['sam_site', 1], ['drone_fac', 2],
     ['missile_base', 1], ['ciws', 2], ['airbase', 1], ['cmd', 1], ['satellite', 1], ['laser', 1], ['bunker', 4],
   ];
@@ -90,6 +101,25 @@ export function planEconomy(sim, brain, c, cs) {
     if (id === 'pump') r = 26;
     if (id === 'radar' && n('radar') >= 1) { const f = brain.front || cap; ax = (cap[0] + f[0]) / 2; ay = (cap[1] + f[1]) / 2; }
     if (!B_(id, ax, ay, r)) { if (sim.countries[c].money < (bd.cost.money || 0)) break; }
+  }
+}
+
+// sınırdan bir kaynak yatağına doğru yeni şehir
+function foundCityToward(sim, brain, c, cap) {
+  const map = sim.map, dep = sim.deposits; let best = null, bd = 1e18;
+  for (const d of dep.list) {
+    if (d.reserve <= 0) continue; const o = map.owner[d.tiles[0]]; if (o === c || (o !== 255)) continue;
+    const dd = (d.x - cap[0]) ** 2 + (d.y - cap[1]) ** 2; if (dd > 70 * 70) continue;
+    const v = dd / (1 + d.reserve / 2000) * (0.7 + brain.rng.next() * 0.6); if (v < bd) { bd = v; best = d; }
+  }
+  if (!best) return;
+  // başkentten yatağa doğru ilerle: kendi toprağının bittiği yerin 2 karo ötesi
+  const dx = best.x - cap[0], dy = best.y - cap[1], L = Math.sqrt(dx * dx + dy * dy) || 1; let px = cap[0], py = cap[1];
+  for (let s = 0; s < L; s++) { const x = (cap[0] + dx / L * s) | 0, y = (cap[1] + dy / L * s) | 0; if (!map.inb(x, y)) break; if (map.owner[y * map.W + x] !== c) { px = x + (dx / L * 2) | 0; py = y + (dy / L * 2) | 0; break; } }
+  for (let r = 0; r <= 6; r++) for (let oy = -r; oy <= r; oy++) for (let ox = -r; ox <= r; ox++) {
+    if (Math.max(Math.abs(ox), Math.abs(oy)) !== r) continue;
+    const x = px + ox, y = py + oy;
+    if (canPlace(sim, c, B.city_found, x, y) === '') { sim.issue({ type: CMD.BUILD, c, def: B.city_found, x, y }); return; }
   }
 }
 

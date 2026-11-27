@@ -1,6 +1,6 @@
 # İlerleme
 
-Durum: **15 aşamanın tamamı + 0.16 görsel/arayüz yenilemesi uygulandı**. `release/DronSavasi.apk` üretiliyor, `node tests/run-all.mjs` tüm testleri geçiyor.
+Durum: **15 aşama + 0.16 görsel yenileme + 0.17 (başkent seçimi, sınırlar, rezervler, sivil sanayi, yangın, 32 px grafik, 2048 harita) uygulandı**. `release/DronSavasi.apk` üretiliyor, `node tests/run-all.mjs` tüm testleri geçiyor.
 
 | # | Aşama | Durum | Ana dosyalar |
 |---|---|---|---|

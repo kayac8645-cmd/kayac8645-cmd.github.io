@@ -2,12 +2,14 @@
 import { KIND, C, F } from '../core/ecs.js';
 import { BUILDINGS, HARDEN } from '../data/buildings.js';
 import { RD } from '../world/map.js';
+import { igniteArea, chainReaction } from './fire.js';
 
 const MAX_DECALS = 3000;
 
 export function explode(sim, x, y, r, dmg, owner, opts = {}) {
   const e = sim.e, map = sim.map;
   sim.emit({ k: 'boom', x, y, r, big: dmg > 120 ? 2 : dmg > 40 ? 1 : 0, air: !!opts.air });
+  if (!opts.air && dmg >= 20) igniteArea(sim, x, y, Math.max(0.8, r * 0.8), Math.min(0.9, dmg / 160));
   if (!opts.air) {
     if (map.decals.length >= MAX_DECALS) map.decals.shift();
     map.decals.push({ x, y, r: Math.min(3, r * 0.6 + 0.3), k: dmg > 100 ? 1 : 0 });
@@ -95,6 +97,7 @@ export function ruinBuilding(sim, i, attacker) {
     sim.notify(c, 'n_destroyed', ['b_' + bd.id], e.x[i], e.y[i], bd.id === 'hq' || bd.size[0] >= 3 ? 3 : 2);
   }
   if (bd.id === 'hydro') floodFrom(sim, i);
+  else if (bd.id !== 'bridge') chainReaction(sim, i);
 }
 
 // Baraj yıkılırsa nehrin aşağısı su basar

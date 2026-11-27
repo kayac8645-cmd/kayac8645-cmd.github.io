@@ -2,11 +2,12 @@
 import { PixelBuf, TEAM_KEY } from './pixel.js';
 import { P32 } from '../data/palette.js';
 import { BUILDINGS } from '../data/buildings.js';
-import { buildingArt, VEHICLES, TOPDOWN, CITY, cityArt, cityLights, treeArt, resIcon, RES_ICON_LIST, depositArt } from './looks.js';
+import { buildingArt, VEHICLES, TOPDOWN, treeArt, resIcon, RES_ICON_LIST, depositArt, SC } from './looks.js';
+import { blockArt, BLOCK_KINDS } from './city.js';
 
-export const TILE = 16;
-export const BUILD_TOP = 40; // binaların taban izinin üstünde kalan çizim payı (px)
-export const CITY_KINDS = { house: 6, rowhouse: 3, apartment: 3, office: 2, shop: 3, gas: 1, school: 1, park: 1 };
+export const TILE = 32; // dünya pikseli / karo (16 px tasarım × 2 detay)
+export const BUILD_TOP_L = 40; // mantıksal üst pay
+export const BUILD_TOP = BUILD_TOP_L * SC; // yerel piksel: binanın taban izinin üstünde kalan çizim payı
 
 // ---------- birim sprite'ları (yukarıdan, +x yönüne bakar) ----------
 const UNIT_GEN = {
@@ -74,7 +75,7 @@ function loadImage(src) { return new Promise((res, rej) => { const i = new Image
 
 export const DIRS = 16;
 export async function buildAtlas() {
-  const A = new Atlas(2048);
+  const A = new Atlas(4096);
   // beyaz piksel ve yumuşak ışık
   const wb = new PixelBuf(4, 4); wb.rect(0, 0, 4, 4, 0xffffffff); A.addBuf('white', wb);
   A.white = A.get('white'); A.white.x += 1; A.white.y += 1; A.white.w = 1; A.white.h = 1;
@@ -109,15 +110,15 @@ export async function buildAtlas() {
   BUILDINGS.forEach((def, i) => {
     if (def.look === 'bridge') return;
     for (let v = 0; v < 3; v++) {
-      const { a, meta } = buildingArt(def, v, 17 + i * 13, BUILD_TOP);
+      const { a, meta } = buildingArt(def, v, 17 + i * 13, BUILD_TOP_L);
       const mask = a.splitTeam();
       A.addBuf(`b:${def.id}:${v}`, a, { meta, top: BUILD_TOP });
       if (mask) A.addBuf(`b:${def.id}:${v}:m`, mask);
     }
   });
-  // şehir yapıları
-  for (const [k, n] of Object.entries(CITY_KINDS)) for (let v = 0; v < n; v++) for (const vr of [0, 2]) {
-    const a = cityArt(k, v, vr); A.addBuf(`c:${k}:${v}:${vr}`, a, { lights: vr ? [] : cityLights(a) });
+  // şehir adaları (3x3 karo)
+  for (const [k, n] of Object.entries(BLOCK_KINDS)) for (let v = 0; v < n; v++) for (const vr of [0, 1]) {
+    const a = blockArt(k, v, vr); A.addBuf(`blk:${k}:${v}:${vr}`, a, { lights: vr ? [] : a.lights.filter((_, j) => j % 2 === 0) });
   }
   // kaynak ikonları
   for (const id of RES_ICON_LIST) A.addBuf('res:' + id, resIcon(id));

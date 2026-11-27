@@ -1,6 +1,9 @@
 // Prosedürel piksel sanat: 38 bina (3/4 görünüm), kara araçları, yukarıdan uçak/gemi, şehir yapıları,
 // ağaçlar, kaynak ikonları ve maden yatağı çizimleri. Hepsi Art araç takımıyla; harici görsel yok.
 import { Art, shade, hex } from './art.js';
+import { tree32 } from './city.js';
+export const SC = 2; // 16 px tasarım -> 32 px karo (yerel detay 2 kat)
+const A2 = (w, h, seed) => new Art(w * SC, h * SC, seed, SC);
 
 const C = (h) => hex(h);
 // ---------- ortak parçalar ----------
@@ -231,17 +234,26 @@ export const LOOKS = {
     a.box(6, E + 22, 10, 4, 4, '#8c919c'); mast(a, 24, E + 26, 28, m.lights);
   },
   bunker(a, W, H, E) { for (let r = 7; r > 0; r--) a.ell(8, E + 10 - (7 - r) * 0.5, r, Math.max(1, (r * 0.7) | 0), shade('#a3a09a', 0.8 + (7 - r) * 0.05)); a.rect(4, E + 9, 8, 1, '#1a1d28'); },
+  textile(a, W, H, E, m) { a.pad(0, E + 2, W, H - 2, '#a3a09a'); a.box(3, E + 8, 22, 12, 9, '#c9a0a8', { roof: '#e0c0c8', win: 1, lights: m.lights, door: 1 }); for (let x = 5; x < 24; x += 6) a.line(x, E - 1, x + 3, E - 3, '#f6f8fb'); chimney(a, W - 5, E + 12, 3, 16, false, m.smoke); },
+  food(a, W, H, E, m) { a.pad(0, E + 2, W, H - 2, '#a3a09a'); a.box(3, E + 10, 16, 10, 8, '#e6e0c8', { roof: '#f6f2e0', win: 1, lights: m.lights, door: 1 }); a.cyl(24, E + 18, 4, 14, '#c9ced8'); a.cyl(24, E + 28, 3, 6, '#d9dee6'); a.rect(4, E + H - 4, 8, 2, '#58d16a'); },
+  auto(a, W, H, E, m) { a.pad(0, E + 1, W, H - 1, '#7d7a74'); a.box(3, E + 6, 34, 12, 10, '#5c6a80', { roof: '#7d8aa0', stripe: 1, door: 1 }); for (let k = 0; k < 4; k++) { const x = 4 + k * 10; a.rect(x, E + H - 7, 7, 4, ['#c43a33', '#2f5aa8', '#eef1f5', '#f7c948'][k]); a.rect(x + 1, E + H - 8, 4, 2, '#8cbfdc'); a.p(x + 1, E + H - 3, '#1a1d28'); a.p(x + 5, E + H - 3, '#1a1d28'); } },
+  appliance(a, W, H, E, m) { a.pad(0, E + 2, W, H - 2, '#a3a09a'); a.box(3, E + 8, 22, 12, 11, '#d6d9de', { roof: '#eef1f5', win: 1, lights: m.lights, door: 1, vents: 3 }); a.rect(5, E + H - 4, 4, 3, '#eef1f5'); a.rect(10, E + H - 4, 4, 3, '#c9ced8'); a.p(11, E + H - 3, '#2f5aa8'); },
+  city_found(a, W, H, E, m) { a.pad(1, E + 4, W - 2, H - 5, '#cfa874', false); a.line(3, E + 14, 3, E - 2, '#6b4a2f'); for (let yy = 0; yy < 5; yy++) for (let xx = 0; xx < 7; xx++) a.team(4 + xx, E - 2 + yy); a.rect(8, E + 8, 6, 4, '#8c6440'); a.rect(8, E + 7, 6, 1, '#b08050'); a.p(12, E + 12, '#f7c948'); },
+  fire_station(a, W, H, E, m) { a.pad(0, E + 2, W, H - 2, '#7d7a74'); a.box(2, E + 3, 26, 9, 8, '#c43a33', { roof: '#e05a4f', door: 0 }); for (let k = 0; k < 2; k++) a.rect(5 + k * 10, E + 7, 8, 5, '#eef1f5'); a.line(5, E + 9, 12, E + 9, '#c9ced8'); a.rect(24, E - 6, 3, 10, '#c43a33'); a.p(25, E - 7, '#4b85e0'); m.lights.push([25, E - 7, 2]); },
   bridge() {},
 };
+// E: mantıksal üst pay; çıktı yerel piksel (SC kat), meta koordinatları yerel
 export function buildingArt(def, variant, seed, E) {
   const W = def.size[0] * 16, H = def.size[1] * 16;
-  const a = new Art(W, H + E, seed); const m = { lights: [], smoke: [], flame: [] };
+  const a = A2(W, H + E, seed); const m = { lights: [], smoke: [], flame: [] };
   (LOOKS[def.look] || LOOKS.depot)(a, W, H, E, m);
   if (variant === 1) a.damage(seed + 7);
   if (variant === 2) a.ruin(E + Math.round(H * 0.7), seed + 3);
   else a.outline();
-  a.shadow(3, 2, 80);
-  return { a, meta: variant === 2 ? { lights: [], smoke: [], flame: [], dish: null } : m };
+  a.shadow(3 * SC, 2 * SC, 80);
+  const sc = (l) => l.map((p) => [p[0] * SC, p[1] * SC, p[2]]);
+  const meta = variant === 2 ? { lights: [], smoke: [], flame: [], dish: null } : { lights: sc(m.lights), smoke: sc(m.smoke), flame: sc(m.flame), dish: m.dish ? [m.dish[0] * SC, m.dish[1] * SC] : null };
+  return { a, meta };
 }
 
 // ---------- kara araçları (sağa bakan, 3/4) ----------
@@ -253,65 +265,63 @@ function hull(a, x, y, w, h, base) {
 }
 function trackRow(a, x, y, w) { a.rect(x, y, w, 2, '#2b2f3c'); for (let xx = x; xx < x + w; xx += 2) a.p(xx, y, '#4a5061'); }
 function wheelsRow(a, xs, y) { for (const x of xs) { a.rect(x, y, 2, 2, '#1a1d28'); a.p(x, y, '#4a5061'); } }
+const OLN = hex('#56703f');
+function soldier(a, x, y) {
+  a.ell(x, y + 10, 3, 1, '#2b3a22'); a.rect(x - 2, y + 2, 5, 6, OLN); a.line(x - 2, y + 2, x - 2, y + 7, shade(OLN, 1.3)); a.rect(x - 2, y + 5, 5, 1, '#5a4a2a');
+  a.rect(x - 2, y + 8, 2, 3, '#3d4d2e'); a.rect(x + 1, y + 8, 2, 3, '#3d4d2e'); a.p(x - 2, y + 10, '#1a1d28'); a.p(x + 2, y + 10, '#1a1d28');
+  a.ell(x, y, 2, 2, '#d9b48a'); a.ell(x, y - 1, 3, 2, '#4f6b3a'); a.p(x - 1, y - 2, '#6b8a4f'); a.line(x + 3, y + 3, x + 7, y, '#1a1d28'); a.p(x + 2, y + 4, '#d9b48a'); a.rect(x - 4, y + 3, 2, 4, '#6b5a3a');
+}
 export const VEHICLES = {
-  armor() { const a = new Art(26, 16, 3); trackRow(a, 2, 3, 20); trackRow(a, 2, 12, 20); hull(a, 3, 4, 18, 8, OLIVE); a.rect(6, 6, 4, 4, shade(OLIVE, 0.85)); a.ell(12, 8, 4, 3, shade(OLIVE, 1.1)); a.ell(11, 7, 2, 1, shade(OLIVE, 1.35)); a.line(15, 8, 25, 8, '#2b3a22'); a.line(15, 7, 24, 7, '#6b8a4f'); a.team(5, 5); a.team(6, 5); return a; },
-  mech() { const a = new Art(26, 16, 4); hull(a, 2, 4, 21, 8, OLIVE); a.rect(17, 5, 5, 6, shade(OLIVE, 1.2)); for (let k = 0; k < 3; k++) a.rect(4 + k * 4, 5, 3, 2, shade(OLIVE, 0.8)); a.ell(12, 8, 2, 1, shade(OLIVE, 1.3)); a.line(12, 8, 18, 6, '#2b2f3c'); a.p(21, 6, '#8cbfdc'); wheelsRow(a, [4, 9, 14, 19], 12); wheelsRow(a, [4, 9, 14, 19], 2); a.team(4, 9); a.team(5, 9); return a; },
-  inf() {
-    const a = new Art(24, 18, 5); const pos = [[5, 5], [10, 3], [15, 5], [7, 10], [13, 10], [18, 9]];
+  armor() {
+    const a = new Art(52, 32, 3, 1);
+    for (const y0 of [3, 24]) { a.rect(4, y0, 38, 5, '#2b2f3c'); for (let x = 4; x < 42; x += 3) { a.line(x, y0, x, y0 + 4, '#4a5061'); a.p(x + 1, y0 + 1, '#6d7486'); } for (let x = 7; x < 41; x += 6) { a.ell(x, y0 + 2, 1, 1, '#1a1d28'); } }
+    for (let yy = 7; yy < 25; yy++) for (let xx = 6; xx < 40; xx++) { let f = 1.18 - 0.35 * ((yy - 7) / 18); if (((xx / 6) | 0) + ((yy / 5) | 0) % 3 === 0) f *= 0.85; a.p(xx, yy, shade(OLN, f)); }
+    a.line(6, 7, 39, 7, shade(OLN, 1.4)); a.line(6, 24, 39, 24, shade(OLN, 0.55));
+    a.ell(23, 15, 8, 6, shade(OLN, 0.75)); a.ell(22, 14, 7, 5, shade(OLN, 1.05)); a.ell(20, 12, 4, 2, shade(OLN, 1.3));
+    for (let x = 30; x < 51; x++) { a.p(x, 14, '#3a4a2e'); a.p(x, 15, '#5c7a48'); a.p(x, 16, '#2b3a22'); } a.rect(49, 13, 3, 5, '#2b2f3c'); a.rect(25, 10, 3, 2, '#8cbfdc');
+    a.rect(10, 18, 3, 3, [255, 0, 255]); a.rect(13, 18, 1, 3, [255, 0, 255]);
+    return a;
+  },
+  inf() { const a = new Art(48, 36, 5, 1); for (const [x, y] of [[8, 6], [17, 3], [26, 6], [35, 4], [11, 17], [21, 15], [30, 18], [39, 14]]) soldier(a, x, y); for (let x = 3; x < 46; x += 3) { a.ell(x, 31, 2, 1, '#b8935e'); a.p(x, 30, '#dcc08a'); } for (let x = 20; x < 27; x++) a.p(x, 34, [255, 0, 255]); return a; },
+  sam_long() {
+    const a = new Art(52, 40, 11, 1);
+    for (let yy = 22; yy < 32; yy++) for (let xx = 3; xx < 38; xx++) a.p(xx, yy, shade('#6b7a55', 1.15 - 0.3 * ((yy - 22) / 10)));
+    a.rect(36, 17, 12, 15, '#7d8a65'); a.rect(36, 17, 12, 2, '#9aaa80'); a.rect(41, 20, 5, 4, '#8cbfdc'); a.p(41, 20, '#d6ecf8');
+    for (const x of [7, 15, 23, 31, 43]) { a.ell(x, 33, 2, 2, '#1a1d28'); a.p(x - 1, 32, '#6d7486'); }
+    for (let k = 0; k < 4; k++) { const x0 = 6 + k * 6; for (let t = 0; t < 20; t++) { const px = x0 + (t >> 1), py = 22 - t; a.p(px, py, '#eef1f5'); a.p(px + 1, py, '#c9ced8'); a.p(px + 2, py, '#9aa1b0'); } a.p(x0 + 10, 2, '#c43a33'); }
+    a.rect(6, 27, 5, 2, [255, 0, 255]); return a;
+  },
+  _armor16() { const a = A2(26, 16, 3); trackRow(a, 2, 3, 20); trackRow(a, 2, 12, 20); hull(a, 3, 4, 18, 8, OLIVE); a.rect(6, 6, 4, 4, shade(OLIVE, 0.85)); a.ell(12, 8, 4, 3, shade(OLIVE, 1.1)); a.ell(11, 7, 2, 1, shade(OLIVE, 1.35)); a.line(15, 8, 25, 8, '#2b3a22'); a.line(15, 7, 24, 7, '#6b8a4f'); a.team(5, 5); a.team(6, 5); return a; },
+  mech() { const a = A2(26, 16, 4); hull(a, 2, 4, 21, 8, OLIVE); a.rect(17, 5, 5, 6, shade(OLIVE, 1.2)); for (let k = 0; k < 3; k++) a.rect(4 + k * 4, 5, 3, 2, shade(OLIVE, 0.8)); a.ell(12, 8, 2, 1, shade(OLIVE, 1.3)); a.line(12, 8, 18, 6, '#2b2f3c'); a.p(21, 6, '#8cbfdc'); wheelsRow(a, [4, 9, 14, 19], 12); wheelsRow(a, [4, 9, 14, 19], 2); a.team(4, 9); a.team(5, 9); return a; },
+  _inf16() {
+    const a = A2(24, 18, 5); const pos = [[5, 5], [10, 3], [15, 5], [7, 10], [13, 10], [18, 9]];
     for (const [x, y] of pos) { a.rect(x - 1, y + 1, 3, 3, OLIVE); a.p(x - 1, y + 1, shade(OLIVE, 1.3)); a.ell(x, y, 1, 1, '#3d4d2e'); a.p(x, y - 1, '#6b7d52'); a.line(x + 2, y + 2, x + 3, y + 1, '#1a1d28'); a.p(x - 1, y + 4, '#2b2f3c'); a.p(x + 1, y + 4, '#2b2f3c'); }
     a.team(9, 15); a.team(10, 15); a.team(11, 15); for (let x = 2; x < 22; x += 2) { a.p(x, 16, '#b8935e'); a.p(x + 1, 16, '#dcc08a'); }
     return a;
   },
-  artillery() { const a = new Art(28, 16, 6); trackRow(a, 3, 4, 16); trackRow(a, 3, 12, 16); hull(a, 4, 5, 14, 7, OLIVE); a.box(6, 7, 7, 3, 3, shade(OLIVE, 1.05), { dep: 1 }); for (let x = 13; x < 27; x++) { const y = 7 - ((x - 13) >> 2); a.p(x, y, '#2b3a22'); a.p(x, y + 1, '#6b8a4f'); } a.team(5, 10); a.team(6, 10); return a; },
-  engineer() { const a = new Art(26, 16, 7); hull(a, 2, 5, 20, 7, '#8a7a4a'); a.box(16, 9, 6, 3, 4, '#a89a60', { dep: 1 }); a.line(4, 6, 12, 2, '#f7c948'); a.line(12, 2, 14, 5, '#f7c948'); a.p(21, 7, '#8cbfdc'); wheelsRow(a, [4, 9, 17], 12); a.team(5, 10); a.team(6, 10); return a; },
-  ad_bat() { const a = new Art(24, 18, 8); trackRow(a, 3, 6, 16); trackRow(a, 3, 14, 16); hull(a, 4, 7, 14, 7, OLIVE); a.ell(11, 10, 3, 2, shade(OLIVE, 1.2)); a.line(10, 9, 20, 1, '#2b2f3c'); a.line(12, 9, 22, 2, '#2b2f3c'); a.ell(6, 5, 2, 1, '#c9ced8'); a.p(6, 4, '#4b85e0'); a.team(5, 12); a.team(6, 12); return a; },
-  ew_bat() { const a = new Art(26, 18, 9); hull(a, 2, 8, 20, 7, OLIVE); a.box(4, 12, 11, 4, 5, '#5f7a45', { dep: 1 }); a.line(7, 1, 7, 7, '#6d7486'); a.line(12, 0, 12, 7, '#6d7486'); a.line(6, 1, 8, 1, '#eef1f5'); a.line(11, 0, 13, 0, '#eef1f5'); a.p(20, 10, '#8cbfdc'); wheelsRow(a, [4, 10, 17], 15); a.team(16, 11); a.team(17, 11); return a; },
-  mlrs() { const a = new Art(28, 18, 10); hull(a, 2, 9, 22, 6, OLIVE); a.box(19, 13, 6, 3, 4, shade(OLIVE, 1.1), { dep: 1 }); a.p(23, 10, '#8cbfdc'); for (let r = 0; r < 2; r++) for (let c = 0; c < 4; c++) { a.ell(5 + c * 3, 5 + r * 3, 1, 1, shade(OLIVE, 0.8)); a.p(5 + c * 3, 5 + r * 3, '#1a1d28'); } a.line(3, 3, 16, 3, shade(OLIVE, 1.3)); wheelsRow(a, [4, 9, 14, 20], 15); a.team(4, 12); a.team(5, 12); return a; },
-  sam_long() { const a = new Art(28, 22, 11); launcher(a, 3, 20, 4, 14, '#6b7a55'); a.team(4, 17); a.team(5, 17); return a; },
-  sam_med() { const a = new Art(28, 20, 12); launcher(a, 3, 18, 3, 10, '#6b7a55'); a.team(4, 15); a.team(5, 15); return a; },
-  sam_short() { const a = new Art(28, 18, 13); launcher(a, 3, 16, 2, 7, '#6b7a55'); a.team(4, 13); a.team(5, 13); return a; },
-  truck() { const a = new Art(22, 14, 14); hull(a, 2, 4, 13, 6, '#7d7a74'); a.box(14, 8, 6, 3, 4, '#9aa1b0', { dep: 1 }); a.p(18, 5, '#8cbfdc'); wheelsRow(a, [4, 9, 16], 10); a.team(4, 6); a.team(5, 6); return a; },
-  truck_supply() { const a = new Art(22, 14, 15); hull(a, 2, 3, 13, 7, '#6b8a4f'); for (let x = 3; x < 14; x += 3) a.line(x, 3, x, 9, '#4f6b3a'); a.box(14, 8, 6, 3, 4, '#5f7a45', { dep: 1 }); a.p(18, 5, '#8cbfdc'); wheelsRow(a, [4, 9, 16], 10); a.team(4, 5); return a; },
+  artillery() { const a = A2(28, 16, 6); trackRow(a, 3, 4, 16); trackRow(a, 3, 12, 16); hull(a, 4, 5, 14, 7, OLIVE); a.box(6, 7, 7, 3, 3, shade(OLIVE, 1.05), { dep: 1 }); for (let x = 13; x < 27; x++) { const y = 7 - ((x - 13) >> 2); a.p(x, y, '#2b3a22'); a.p(x, y + 1, '#6b8a4f'); } a.team(5, 10); a.team(6, 10); return a; },
+  engineer() { const a = A2(26, 16, 7); hull(a, 2, 5, 20, 7, '#8a7a4a'); a.box(16, 9, 6, 3, 4, '#a89a60', { dep: 1 }); a.line(4, 6, 12, 2, '#f7c948'); a.line(12, 2, 14, 5, '#f7c948'); a.p(21, 7, '#8cbfdc'); wheelsRow(a, [4, 9, 17], 12); a.team(5, 10); a.team(6, 10); return a; },
+  ad_bat() { const a = A2(24, 18, 8); trackRow(a, 3, 6, 16); trackRow(a, 3, 14, 16); hull(a, 4, 7, 14, 7, OLIVE); a.ell(11, 10, 3, 2, shade(OLIVE, 1.2)); a.line(10, 9, 20, 1, '#2b2f3c'); a.line(12, 9, 22, 2, '#2b2f3c'); a.ell(6, 5, 2, 1, '#c9ced8'); a.p(6, 4, '#4b85e0'); a.team(5, 12); a.team(6, 12); return a; },
+  ew_bat() { const a = A2(26, 18, 9); hull(a, 2, 8, 20, 7, OLIVE); a.box(4, 12, 11, 4, 5, '#5f7a45', { dep: 1 }); a.line(7, 1, 7, 7, '#6d7486'); a.line(12, 0, 12, 7, '#6d7486'); a.line(6, 1, 8, 1, '#eef1f5'); a.line(11, 0, 13, 0, '#eef1f5'); a.p(20, 10, '#8cbfdc'); wheelsRow(a, [4, 10, 17], 15); a.team(16, 11); a.team(17, 11); return a; },
+  mlrs() { const a = A2(28, 18, 10); hull(a, 2, 9, 22, 6, OLIVE); a.box(19, 13, 6, 3, 4, shade(OLIVE, 1.1), { dep: 1 }); a.p(23, 10, '#8cbfdc'); for (let r = 0; r < 2; r++) for (let c = 0; c < 4; c++) { a.ell(5 + c * 3, 5 + r * 3, 1, 1, shade(OLIVE, 0.8)); a.p(5 + c * 3, 5 + r * 3, '#1a1d28'); } a.line(3, 3, 16, 3, shade(OLIVE, 1.3)); wheelsRow(a, [4, 9, 14, 20], 15); a.team(4, 12); a.team(5, 12); return a; },
+  sam_med() { const a = A2(28, 20, 12); launcher(a, 3, 18, 3, 10, '#6b7a55'); a.team(4, 15); a.team(5, 15); return a; },
+  sam_short() { const a = A2(28, 18, 13); launcher(a, 3, 16, 2, 7, '#6b7a55'); a.team(4, 13); a.team(5, 13); return a; },
+  truck() { const a = A2(22, 14, 14); hull(a, 2, 4, 13, 6, '#7d7a74'); a.box(14, 8, 6, 3, 4, '#9aa1b0', { dep: 1 }); a.p(18, 5, '#8cbfdc'); wheelsRow(a, [4, 9, 16], 10); a.team(4, 6); a.team(5, 6); return a; },
+  truck_supply() { const a = A2(22, 14, 15); hull(a, 2, 3, 13, 7, '#6b8a4f'); for (let x = 3; x < 14; x += 3) a.line(x, 3, x, 9, '#4f6b3a'); a.box(14, 8, 6, 3, 4, '#5f7a45', { dep: 1 }); a.p(18, 5, '#8cbfdc'); wheelsRow(a, [4, 9, 16], 10); a.team(4, 5); return a; },
 };
 // yukarıdan görünen (döndürülen) araçlar: +x yönüne bakar
 export const TOPDOWN = {
-  jet() { const a = new Art(17, 15, 21); for (let x = 2; x < 16; x++) { a.p(x, 7, '#c9ced8'); a.p(x, 6, '#e6e9ee'); a.p(x, 8, '#9aa1b0'); } for (let k = 0; k < 6; k++) { a.line(7 - k, 7, 9 - k, 1 + k, '#9aa1b0'); a.line(7 - k, 7, 9 - k, 13 - k, '#8c919c'); } a.line(2, 7, 0, 4, '#9aa1b0'); a.line(2, 7, 0, 10, '#9aa1b0'); a.p(14, 7, '#5b8fbf'); a.p(13, 7, '#8cbfdc'); a.team(6, 4); a.team(6, 10); return a; },
-  heli() { const a = new Art(17, 17, 22); a.ell(9, 8, 4, 3, '#56703f'); a.ell(10, 7, 2, 1, '#8cbfdc'); a.line(1, 8, 5, 8, '#56703f'); a.line(0, 6, 0, 10, '#6d7486'); for (let k = -7; k <= 7; k++) { a.p(9 + k, 8 + Math.round(k * 0.3), '#c9ced8'); a.p(9 - Math.round(k * 0.3), 8 + k, '#c9ced8'); } a.team(7, 9); return a; },
-  boat() { const a = new Art(13, 7, 23); a.ell(6, 3, 5, 2, '#c9ced8'); a.p(11, 3, '#eef1f5'); a.rect(4, 2, 3, 3, '#4a5061'); a.team(2, 3); a.team(3, 3); for (let k = 0; k < 3; k++) a.p(0 - 0, 2 + k, '#eef6fb'); return a; },
-  corvette() { const a = new Art(27, 9, 24); for (let x = 1; x < 25; x++) { const hh = x > 19 ? 25 - x : 3; for (let y = -hh; y <= hh; y++) a.p(x, 4 + y, shade('#8c919c', 1.1 - Math.abs(y) * 0.06)); } a.box(8, 2, 8, 4, 3, '#c9ced8', { dep: 1 }); a.rect(19, 3, 3, 3, '#4a5061'); a.p(21, 4, '#2b2f3c'); a.team(4, 4); a.team(5, 4); return a; },
+  jet() { const a = A2(17, 15, 21); for (let x = 2; x < 16; x++) { a.p(x, 7, '#c9ced8'); a.p(x, 6, '#e6e9ee'); a.p(x, 8, '#9aa1b0'); } for (let k = 0; k < 6; k++) { a.line(7 - k, 7, 9 - k, 1 + k, '#9aa1b0'); a.line(7 - k, 7, 9 - k, 13 - k, '#8c919c'); } a.line(2, 7, 0, 4, '#9aa1b0'); a.line(2, 7, 0, 10, '#9aa1b0'); a.p(14, 7, '#5b8fbf'); a.p(13, 7, '#8cbfdc'); a.team(6, 4); a.team(6, 10); return a; },
+  heli() { const a = A2(17, 17, 22); a.ell(9, 8, 4, 3, '#56703f'); a.ell(10, 7, 2, 1, '#8cbfdc'); a.line(1, 8, 5, 8, '#56703f'); a.line(0, 6, 0, 10, '#6d7486'); for (let k = -7; k <= 7; k++) { a.p(9 + k, 8 + Math.round(k * 0.3), '#c9ced8'); a.p(9 - Math.round(k * 0.3), 8 + k, '#c9ced8'); } a.team(7, 9); return a; },
+  boat() { const a = A2(13, 7, 23); a.ell(6, 3, 5, 2, '#c9ced8'); a.p(11, 3, '#eef1f5'); a.rect(4, 2, 3, 3, '#4a5061'); a.team(2, 3); a.team(3, 3); for (let k = 0; k < 3; k++) a.p(0 - 0, 2 + k, '#eef6fb'); return a; },
+  corvette() { const a = A2(27, 9, 24); for (let x = 1; x < 25; x++) { const hh = x > 19 ? 25 - x : 3; for (let y = -hh; y <= hh; y++) a.p(x, 4 + y, shade('#8c919c', 1.1 - Math.abs(y) * 0.06)); } a.box(8, 2, 8, 4, 3, '#c9ced8', { dep: 1 }); a.rect(19, 3, 3, 3, '#4a5061'); a.p(21, 4, '#2b2f3c'); a.team(4, 4); a.team(5, 4); return a; },
 };
-
-// ---------- şehir yapıları (1 karo taban, yukarı uzar) ----------
-const ROOFS = ['#b7593f', '#94402f', '#5c6272', '#7a8090', '#6e2e24'], WALLS = ['#e8dcc4', '#d9c9a8', '#cfc2a8', '#e3d6bd', '#c9b8a0'];
-export const CITY = {
-  house(v) { const a = new Art(16, 26, 31 + v); a.gable(2, 25, 12, 5, 8, ROOFS[v % 5], WALLS[(v * 3) % 5], { door: v % 2 === 0 }); return a; },
-  rowhouse(v) { const a = new Art(16, 30, 41 + v); a.gable(1, 29, 7, 5, 11, ROOFS[v % 5], WALLS[v % 5], { door: true }); a.gable(8, 29, 7, 5, 13, ROOFS[(v + 2) % 5], WALLS[(v + 1) % 5], { door: true }); return a; },
-  apartment(v) { const a = new Art(16, 40, 51 + v); a.box(1, 29, 11, 4, 24, v % 2 ? '#b9bcc4' : '#c9b8a0', { roof: v % 2 ? '#d6d9de' : '#ddd0b8', win: 1, lights: [], dep: 2 }); return a; },
-  office(v) {
-    const a = new Art(16, 48, 61 + v); a.box(2, 37, 10, 4, 34, v % 2 ? '#3f6a9a' : '#4a5a6a', { roof: '#9aa1b0', dep: 2 });
-    for (let y = 8; y < 41; y += 3) for (let x = 2; x < 12; x++) a.p(x, y, (x + y) % 5 ? '#8cbfdc' : '#d6ecf8');
-    return a;
-  },
-  shop(v) { const a = new Art(16, 22, 71 + v); a.box(1, 15, 12, 4, 8, '#e9dcc0', { roof: '#c9ced8', dep: 2 }); for (let k = 0; k < 6; k++) a.rect(1 + k * 2, 13, 2, 2, k % 2 ? ['#c43a33', '#2f5aa8', '#356b35'][v % 3] : '#eef1f5'); a.rect(3, 15, 4, 4, '#8cbfdc'); a.rect(8, 15, 3, 4, '#5a3620'); return a; },
-  gas() { const a = new Art(16, 22, 81); a.rect(1, 9, 12, 2, '#c43a33'); a.rect(1, 9, 12, 1, '#e86a5a'); a.line(3, 11, 3, 18, '#c9ced8'); a.line(11, 11, 11, 18, '#c9ced8'); a.box(5, 16, 3, 2, 4, '#c9ced8', { dep: 1 }); a.p(6, 14, '#58d16a'); a.rect(13, 4, 2, 5, '#f7c948'); return a; },
-  school() { const a = new Art(16, 24, 82); a.box(1, 17, 12, 5, 8, '#d9a35a', { roof: '#c97a4a', win: 1, lights: [], dep: 2 }); a.line(14, 4, 14, 16, '#4a5061'); a.rect(14, 4, 2, 2, '#3f7fe0'); return a; },
-  park() { const a = new Art(16, 18, 83); a.rect(0, 2, 16, 16, '#6aa64e'); a.tex(0, 2, 16, 16, '#6aa64e', 0.3); a.ell(9, 11, 3, 2, '#4a85b5'); a.p(8, 10, '#8cbfdc'); TREE(a, 4, 7, '#3f8a3a'); TREE(a, 13, 15, '#4a8a3a'); return a; },
-};
-export function cityArt(kind, v, variant) {
-  const a = CITY[kind](v); if (variant === 2) { a.ruin(a.h - 3, v + 5); a.shadow(2, 1, 70); return a; }
-  a.outline(); a.shadow(2, 1, 75); return a;
-}
-// pencere ışık noktaları (gece): binanın ön cephesinden çıkarılır
-export function cityLights(a) {
-  const out = [];
-  for (let y = 0; y < a.h; y++) for (let x = 0; x < a.w; x++) { const v = a.d[y * a.w + x]; const r = v & 255, g = (v >> 8) & 255, b = (v >> 16) & 255; if (b > 200 && r < 200 && (x + y * 3) % 3 === 0) out.push([x, y]); }
-  return out.slice(0, 10);
-}
 
 // ---------- ağaçlar ----------
+// küçük ağaç (16 px tasarım yardımcı)
 function TREE(a, x, y, col) { a.p(x, y + 3, '#5a3620'); a.p(x, y + 2, '#5a3620'); a.ell(x, y - 1, 3, 3, shade(col, 0.82)); a.ell(x - 1, y - 2, 2, 2, col); a.p(x - 1, y - 3, shade(col, 1.4)); }
 export function treeArt(kind, season, v) {
-  const a = new Art(14, 16, 91 + v + season * 7);
+  const a = A2(14, 16, 91 + v + season * 7);
   const green = ['#3f8a3a', '#4f8f3a', '#9a6a2a', '#3a6a3a'][season], alt = ['#2f7a3a', '#5a8a2a', '#c4562a', '#2f5a35'][season];
   if (kind === 'pine') {
     a.line(7, 12, 7, 15, '#5a3620');
@@ -356,7 +366,7 @@ export function resIcon(id) {
 
 // ---------- maden yatağı çizimleri (araziye pişirilir) ----------
 export function depositArt(res, v) {
-  const a = new Art(12, 10, 201 + res * 13 + v);
+  const a = A2(12, 10, 201 + res * 13 + v);
   const rocks = (base, vein) => { for (const [x, y, r] of [[4, 6, 3], [8, 7, 2], [6, 4, 2]].slice(0, 2 + (v % 2))) { a.ell(x, y, r, Math.max(1, r - 1), shade(base, 0.85)); a.ell(x - 1, y - 1, Math.max(1, r - 1), 1, shade(base, 1.2)); a.p(x, y, vein); a.p(x + 1, y - 1, shade(hex(vein), 1.3)); } };
   switch (res) {
     case 1: rocks('#6d6a72', '#c4683a'); break; // demir

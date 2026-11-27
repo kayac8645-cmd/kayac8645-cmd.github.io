@@ -7,7 +7,7 @@ import { BUILDINGS } from '../data/buildings.js';
 import { UNITS, ITEMS, ITEM_BY, AD_SYS, BANDS, CLS } from '../data/defs.js';
 import { DIFFICULTY } from '../data/ai.js';
 import { militaryStrength } from '../sim/diplomacy.js';
-import { census, planEconomy, planProduction, planResearch } from './aieco.js';
+import { census, planEconomy, planProduction } from './aieco.js';
 import { LAUNCHERS } from '../sim/missiles.js';
 import { GM } from '../sim/ground.js';
 
@@ -17,8 +17,7 @@ export function initAI(sim) {
   sim.ai = sim.countries.map((co) => {
     if (!co.ai) return null;
     const p = co.personality; const diff = DIFFICULTY[sim.opts.difficulty ?? 1];
-    const cap = sim.world.countries[co.id].capital;
-    return { c: co.id, p, diff, rng: new RNG((sim.opts.seed * 31 + co.id * 977) >>> 0), home: [cap.x, cap.y], front: null,
+    return { c: co.id, p, diff, rng: new RNG((sim.opts.seed * 31 + co.id * 977) >>> 0), home: null, front: null,
       nextS: 30 + co.id * 13, nextO: 10 + co.id * 7, nextT: 3 + co.id * 3, enemy: -1, enemyDrones: 0, jamLoss: 0, lastLoss: 0, emcon: 0, strikeAt: 0 };
   });
 }
@@ -27,7 +26,8 @@ export function updateAI(sim) {
   if (!sim.ai) return;
   const t = sim.tick;
   for (const b of sim.ai) {
-    if (!b) continue; const co = sim.countries[b.c]; if (!co.alive) continue;
+    if (!b) continue; const co = sim.countries[b.c]; if (!co.alive || !co.placed) continue;
+    if (!b.home) { const cp = sim.world.countries[b.c].capital; b.home = [cp.x, cp.y]; }
     // aynı tick'te en fazla bir katman ağır iş yapar (8 ülke telefonu yormasın)
     if (t >= b.nextS) { b.nextS = t + b.diff.strat; strategic(sim, b); continue; }
     if (t >= b.nextO) { b.nextO = t + b.diff.oper; operational(sim, b); continue; }
@@ -40,12 +40,11 @@ const noisy = (b) => b.rng.next() < b.diff.noise;
 // ---------------- STRATEJİK ----------------
 function strategic(sim, b) {
   const c = b.c, co = sim.countries[c], d = sim.diplo, p = b.p;
-  planResearch(sim, b, c);
   const myS = militaryStrength(sim, c);
   const others = sim.countries.filter((x) => x.alive && x.id !== c);
   // ana rakip: en yakın başkent
   let nearest = null, nd = 1e18;
-  for (const o of others) { const cp = sim.world.countries[o.id].capital; const dd = (cp.x - b.home[0]) ** 2 + (cp.y - b.home[1]) ** 2; if (dd < nd) { nd = dd; nearest = o; } }
+  for (const o of others) { const cp = sim.world.countries[o.id].capital; if (!cp) continue; const dd = (cp.x - b.home[0]) ** 2 + (cp.y - b.home[1]) ** 2; if (dd < nd) { nd = dd; nearest = o; } }
   const atWarWith = others.filter((o) => d.atWar(c, o.id));
   b.enemy = atWarWith.length ? atWarWith.sort((a, b2) => militaryStrength(sim, a.id) - militaryStrength(sim, b2.id))[0].id : nearest ? nearest.id : -1;
   if (b.enemy >= 0) { const cp = sim.world.countries[b.enemy].capital; b.front = [(b.home[0] + cp.x) / 2, (b.home[1] + cp.y) / 2]; }
@@ -67,7 +66,7 @@ function strategic(sim, b) {
       if (target && best > threshold) sim.issue({ type: CMD.DIPLO, c, action: 'war', target: target.id });
     } else {
       // kaybediyorsa ateşkes/barış dene
-      if (co.territory < co.territory0 * 0.75 && b.rng.next() < 0.5) sim.issue({ type: CMD.DIPLO, c, action: b.rng.next() < 0.5 ? 'ceasefire' : 'peace', target: atWarWith[0].id });
+      if (co.territory < (co.territoryMax || co.territory0) * 0.75 && b.rng.next() < 0.5) sim.issue({ type: CMD.DIPLO, c, action: b.rng.next() < 0.5 ? 'ceasefire' : 'peace', target: atWarWith[0].id });
       // ittifak arayışı: ortak düşman
       if (p.alliance > 0.5) for (const o of others) {
         if (d.allied(c, o.id) || d.atWar(c, o.id)) continue;
@@ -115,13 +114,16 @@ function operational(sim, b) {
 
 function deployArmy(sim, b, cs) {
   const c = b.c, e = sim.e, map = sim.map;
-  const line = [...(cs.units.inf || []), ...(cs.units.mech || []), ...(cs.units.armor || [])].filter((i) => !e.routes.get(i));
+  b.ordered = b.ordered || {};
+  const fresh = (i) => !e.routes.get(i) && sim.tick - (b.ordered[i] ?? -1e9) > 400; // aynı birime sık emir verme (pahalı yol araması)
+  const mark = (ids) => { for (const i of ids) b.ordered[i] = sim.tick; if (sim.tick % 2000 < 60) for (const k in b.ordered) if (!e.alive(+k)) delete b.ordered[k]; };
+  const line = [...(cs.units.inf || []), ...(cs.units.mech || []), ...(cs.units.armor || [])].filter(fresh);
   const ad = [...(cs.units.ad_bat || []), ...(cs.units.sam_short || []), ...(cs.units.sam_med || []), ...(cs.units.sam_long || [])];
   const war = b.enemy >= 0 && sim.atWar(c, b.enemy);
   // hava savunması: başkent ve kritik binaların çevresine
   const crit = [...(cs.list.coal_plant || []), ...(cs.list.hq || []), ...(cs.list.drone_fac || []), ...(cs.list.refinery || []), ...(cs.list.missile_fac || [])];
   ad.forEach((u, k) => {
-    if (e.routes.get(u) || !crit.length) return;
+    if (!fresh(u) || !crit.length) return; b.ordered[u] = sim.tick;
     const t = crit[k % crit.length];
     if (e.dist2(u, t) > 25) sim.issue({ type: CMD.MOVE_UNITS, c, ids: [u], x: e.x[t] + ((k % 3) - 1) * 2, y: e.y[t] + 2, mode: GM.HOLD === 0 ? GM.MOVE : GM.MOVE });
   });
@@ -130,7 +132,7 @@ function deployArmy(sim, b, cs) {
     if (!b.front) return;
     const fx = (b.home[0] * 2 + b.front[0]) / 3, fy = (b.home[1] * 2 + b.front[1]) / 3;
     const far = line.filter((i) => (e.x[i] - fx) ** 2 + (e.y[i] - fy) ** 2 > 60);
-    if (far.length) sim.issue({ type: CMD.MOVE_UNITS, c, ids: far, x: fx, y: fy, mode: GM.MOVE });
+    if (far.length) { mark(far); sim.issue({ type: CMD.MOVE_UNITS, c, ids: far, x: fx, y: fy, mode: GM.MOVE }); }
     return;
   }
   // savaşta: hedef seç (istihbarattan); %30 savunmada kalır
@@ -147,8 +149,8 @@ function deployArmy(sim, b, cs) {
   if (noisy(b) && b.front) target = { x: b.front[0], y: b.front[1] };
   const nAtk = Math.ceil(line.length * (0.55 + b.p.aggr * 0.3));
   const atk = line.slice(0, nAtk);
-  if (atk.length >= 2) sim.issue({ type: CMD.MOVE_UNITS, c, ids: atk, x: target.x, y: target.y, mode: GM.ATTACK });
-  const art = (cs.units.artillery || []).filter((i) => !e.routes.get(i));
+  if (atk.length >= 2) { mark(atk); sim.issue({ type: CMD.MOVE_UNITS, c, ids: atk, x: target.x, y: target.y, mode: GM.ATTACK }); }
+  const art = (cs.units.artillery || []).filter(fresh); mark(art);
   if (art.length && atk.length) { const a0 = atk[0]; sim.issue({ type: CMD.MOVE_UNITS, c, ids: art, x: (e.x[a0] + b.home[0]) / 2 * 0.3 + e.x[a0] * 0.7, y: (e.y[a0] + b.home[1]) / 2 * 0.3 + e.y[a0] * 0.7, mode: GM.MOVE }); }
   const ew = cs.units.ew_bat || [];
   if (ew.length && atk.length) sim.issue({ type: CMD.MOVE_UNITS, c, ids: ew, x: e.x[atk[0]] - 2, y: e.y[atk[0]] - 2, mode: GM.MOVE });

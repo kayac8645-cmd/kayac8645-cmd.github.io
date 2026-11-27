@@ -65,7 +65,7 @@ export function updateLogistics(sim) {
       continue;
     }
     const path = e.routes.get(i); if (!path) { e.kill(i); continue; }
-    if (co.res[R.fuel] > 0.002) co.res[R.fuel] -= 0.002;
+    if (co.res[R.fuel] > 0.002) sim.subRes(c, R.fuel, 0.002, 'convoy');
     let wp = e.wp[i];
     if (wp >= path.length) { arrive(sim, i); continue; }
     const ti = path[wp];
@@ -87,7 +87,7 @@ export function updateLogistics(sim) {
 
 function arrive(sim, i) {
   const e = sim.e, co = sim.countries[e.owner[i]];
-  if (e.state[i] === 0) { co.res[e.res[i]] += e.buf[i]; e.kill(i); }
+  if (e.state[i] === 0) { sim.addRes(e.owner[i], e.res[i], e.buf[i], 'b_mine'); e.kill(i); }
   else if (e.state[i] === 1) { e.state[i] = 2; e.timer[i] = 900; e.routes.delete(i); }
 }
 
@@ -107,7 +107,7 @@ function frontSupply(sim) {
       // depo menzili
       for (const d of depots) {
         if (e.dist2(d, u) <= range * range) {
-          if (co.res[R.supply] >= need * 0.6) { co.res[R.supply] -= need * 0.6; e.supply[u] += need; }
+          if (co.res[R.supply] >= need * 0.6) { sim.subRes(c, R.supply, need * 0.6, 'units'); e.supply[u] += need; }
           return;
         }
       }
@@ -124,7 +124,7 @@ function frontSupply(sim) {
       if (best < 0) return;
       const amt = Math.min(20, co.res[R.supply]);
       const cv = spawnConvoy(sim, c, e.aux[best], dest, R.supply, amt, -1, best, 1);
-      if (cv >= 0) { co.res[R.supply] -= amt; points.push(cv); spawned++; }
+      if (cv >= 0) { sim.subRes(c, R.supply, amt, 'units'); points.push(cv); spawned++; }
     });
   }
 }

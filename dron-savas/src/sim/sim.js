@@ -22,6 +22,9 @@ import { updateGround } from './ground.js';
 import { updateWeather, initEnv } from './weather.js';
 import { updateFlood } from './damage.js';
 import { updateAI, initAI } from '../ai/ai.js';
+import { placeAICapitals, updateTerritory } from './territory.js';
+import { updateFire, recoverBurnt } from './fire.js';
+import { applyTech } from './economy.js';
 
 export const SIM_VERSION = 3;
 export { PERSONALITIES };
@@ -36,6 +39,7 @@ export class Simulation {
     this.rng = new RNG(o.seed ^ 0xa5a5a5);
     this.world = generateWorld({ seed: o.seed, size: o.size, countries: o.countries });
     this.map = this.world.map;
+    this.deposits = this.world.deposits; this.phase = 'setup';
     this.e = new EntityStore(o.size >= 1024 ? 65536 : 32768);
     this.grid = new SpatialGrid(this.map.W, this.map.H, this.e.cap, 8);
     this.grid.bind(this.e);
@@ -47,19 +51,26 @@ export class Simulation {
     this.net = { power: [], comms: [], fuel: [], water: [] };
     this.reveal = new Map(); // ifşa olan fırlatıcılar -> bitiş tick
     this.engaged = new Int16Array(o.size >= 1024 ? 65536 : 32768);
+    this.fireTiles = []; this.burntList = []; this.secondary = []; this.oilFires = [];
     this.delayed = []; // gecikmeli emirler (haberleşme kopukluğu)
     this.groups = 0;
     this.winner = -1; this.over = false;
     this.debug = false;
     const n = this.world.countries.length;
     this.countries = this.world.countries.map((ci, k) => {
-      const ai = o.allAI || k !== o.player;
+      const humans = o.humans || [o.player]; const ai = o.allAI || !humans.includes(k); // insan ülkeler tüm eşlerde aynı
       const pers = PERSONALITIES[(o.seed + k * 7) % PERSONALITIES.length];
       return createCountry(ci, this.map, ai, ai ? pers : null);
     });
     this.diplo = new Diplomacy(n);
+    // araştırma yok: tüm teknolojiler ve bonuslar herkese baştan açık
+    for (const co of this.countries) for (let t = 0; t < TECHS.length; t++) applyTech(this, co.id, t);
     initEnv(this);
-    if (!o.skipSetup) { this.setupInitial(); initAI(this); }
+    if (!o.skipSetup) {
+      initAI(this);
+      // izleyici / test / otomatik başlangıç: herkes otomatik yerleşir; oyuncu modu: oyuncu başkentini seçer
+      if (o.allAI || o.autoStart) placeAICapitals(this);
+    }
   }
 
   // ---- yardımcılar ----
@@ -70,15 +81,15 @@ export class Simulation {
   mod(c, key, def = 1) { const v = this.countries[c].mods[key]; return v === undefined ? def : v; }
   atWar(a, b) { return a !== b && this.diplo.atWar(a, b); }
   allied(a, b) { return a === b || this.diplo.allied(a, b); }
-  techOk(c, t) { return !t || this.has(c, t); }
+  techOk() { return true; } // araştırma kaldırıldı: her şey açık, sınır para ve malzeme
   canAfford(c, cost, mul = 1) {
     const co = this.countries[c];
     for (const k in cost) { const v = cost[k] * mul; if (k === 'money') { if (co.money < v) return false; } else if (co.res[R[k]] < v - 1e-9) return false; }
     return true;
   }
-  pay(c, cost, mul = 1) {
+  pay(c, cost, mul = 1, tag = 'b_construction') {
     const co = this.countries[c];
-    for (const k in cost) { const v = cost[k] * mul; if (k === 'money') co.money -= v; else co.res[R[k]] -= v; }
+    for (const k in cost) { const v = cost[k] * mul; if (k === 'money') co.money -= v; else this.subRes(c, R[k], v, tag); }
   }
   emit(ev) { if (this.events.length < this.maxEvents) this.events.push(ev); }
   notify(c, key, args, x, y, lvl = 1) {
@@ -87,6 +98,7 @@ export class Simulation {
     this.emit({ k: 'note', ...ent });
   }
   newGroup() { return ++this.groups; }
+  cityAt(x, y) { const e = this.e; let best = -1, bd = 1e9; e.each(C.CITY, (i) => { const dx = e.x[i] - x, dy = e.y[i] - y, d = dx * dx + dy * dy; const r = e.prog[i] + 1; if (d <= r * r && d < bd) { bd = d; best = i; } }); return best; }
 
   spawnUnit(c, unitIdx, x, y) {
     const u = UNITS[unitIdx];
@@ -118,71 +130,13 @@ export class Simulation {
     return id;
   }
 
-  // ---- başlangıç kurulumu: başkent + kasabalar + küçük çekirdek ----
-  setupInitial() {
-    const map = this.map, e = this.e;
-    // köprüler
-    for (const i of this.world.bridges) {
-      const id = e.create(KIND.BUILDING, B.bridge, 255, (i % map.W) + 0.5, ((i / map.W) | 0) + 0.5, C.BUILDING);
-      e.hp[id] = e.maxhp[id] = BUILDINGS[B.bridge].hp; e.aux[id] = i; e.ox[id] = i % map.W; e.oy[id] = (i / map.W) | 0;
-    }
-    for (const co of this.countries) {
-      const info = this.world.countries[co.id];
-      const mk = (x, y, name, pop, capital) => {
-        const id = e.create(KIND.CITY, 0, co.id, x + 0.5, y + 0.5, C.CITY);
-        e.hp[id] = e.maxhp[id] = 100 + pop / 50; e.buf[id] = pop; e.supply[id] = 0.75;
-        e.prog[id] = Math.ceil(2 + Math.sqrt(pop) / 22); // yarıçap
-        this.cityInfo.set(id, { name, capital, seed: (x * 7919 + y * 31) | 0, pop0: pop });
-        if (capital) { co.capitalCity = id; e.flags[id] |= F.CAPITAL; }
-        // şehir alanını işaretle (bina yerleşimi engeli değil, görsel)
-        return id;
-      };
-      mk(info.capital.x, info.capital.y, info.capital.name, 14000, true);
-      for (const tw of info.towns) mk(tw.x, tw.y, tw.name, 3000 + this.rng.int(3000), false);
-      const cx = info.capital.x, cy = info.capital.y;
-      const put = (defId, near, r = 14) => {
-        const d = B[defId]; const [nx, ny] = near || [cx, cy];
-        const s = findSpot(this, co.id, d, nx, ny, r, this.rng);
-        if (!s) return -1;
-        return placeBuilding(this, co.id, d, s[0], s[1], { instant: true, free: true });
-      };
-      co.hq = put('hq', [cx, cy], 8);
-      if (co.hq >= 0) e.flags[co.hq] |= F.CAPITAL;
-      put('coal_plant', [cx + 6, cy], 16);
-      put('substation', [cx - 4, cy + 4], 12);
-      put('depot', [cx, cy + 5], 12);
-      put('barracks', [cx - 5, cy], 12);
-      put('drone_base', [cx + 3, cy - 6], 14);
-      put('steel_mill', [cx - 6, cy - 5], 16);
-      // en yakın kömür ve demir yatağına maden
-      for (const r of [2, 1]) {
-        const dep = this.findDeposit(co.id, cx, cy, r, 30);
-        if (dep) { const s = findSpot(this, co.id, B.mine, dep[0], dep[1], 3, this.rng, true); if (s) placeBuilding(this, co.id, B.mine, s[0], s[1], { instant: true, free: true }); }
-      }
-      for (const tw of info.towns) {
-        const s = findSpot(this, co.id, B.substation, tw.x + 2, tw.y + 2, 6, this.rng);
-        if (s) placeBuilding(this, co.id, B.substation, s[0], s[1], { instant: true, free: true });
-      }
-      // birimler
-      const sp = (uid, dx, dy) => { const id = this.spawnUnit(co.id, UNIT_BY[uid], cx + dx, cy + dy); return id; };
-      sp('inf', 3, 3); sp('inf', -3, 3); sp('engineer', 0, 3); sp('ad_bat', 1, -2); sp('mlrs', -2, -3);
-      co.territory0 = 0;
-    }
-    // toprak sayımı
-    const cnt = new Int32Array(this.countries.length);
-    for (let i = 0; i < map.N; i++) if (map.owner[i] < cnt.length) cnt[map.owner[i]]++;
-    this.countries.forEach((co, k) => { co.territory = co.territory0 = cnt[k]; });
+  // ---- kaynak akışı (üretim/tüketim dökümü) ----
+  addRes(c, r, amt, tag) { const co = this.countries[c]; co.res[r] += amt; co.fp[r] += amt; if (tag) { const m = co.fbyP[r] || (co.fbyP[r] = {}); m[tag] = (m[tag] || 0) + amt; } }
+  subRes(c, r, amt, tag) { const co = this.countries[c]; co.res[r] -= amt; co.fc[r] += amt; if (tag) { const m = co.fbyC[r] || (co.fbyC[r] = {}); m[tag] = (m[tag] || 0) + amt; } }
+  rollFlows() {
+    for (const d of this.deposits.list) { d.rate = (d.drawn || 0) - (d.drawnPrev || 0); d.drawnPrev = d.drawn || 0; }
+    for (const co of this.countries) { co.flowP = co.fp.slice(); co.flowC = co.fc.slice(); co.flowByP = co.fbyP; co.flowByC = co.fbyC; co.fp.fill(0); co.fc.fill(0); co.fbyP = []; co.fbyC = []; }
   }
-  findDeposit(c, x, y, res, r) {
-    const map = this.map; let best = null, bd = 1e9;
-    for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
-      const nx = x + dx, ny = y + dy; if (!map.inb(nx, ny)) continue;
-      const i = ny * map.W + nx;
-      if (map.res[i] === res && map.owner[i] === c && !map.occ[i]) { const d = dx * dx + dy * dy; if (d < bd) { bd = d; best = [nx, ny]; } }
-    }
-    return best;
-  }
-
   issue(cmd) {
     if (cmd.tick === undefined || cmd.tick <= this.tick) cmd.tick = this.tick + 1;
     this.cmds.push(cmd);
@@ -190,6 +144,7 @@ export class Simulation {
 
   step() {
     if (this.over) { this.tick++; return; }
+    if (this.phase === 'setup') { for (const cmd of this.cmds.take(this.tick)) executeCommand(this, cmd); this.tick++; this.setupTicks = this.tick; return; } // başkent seçimi bekleniyor (saat işlemez)
     const e = this.e;
     // önceki konumlar (render interpolasyonu)
     e.px.set(e.x.subarray(0, e.hi)); e.py.set(e.y.subarray(0, e.hi)); e.pz.set(e.z.subarray(0, e.hi));
@@ -221,6 +176,9 @@ export class Simulation {
     updateAD(this);
     updateGround(this);
     updateFlood(this);
+    updateFire(this); recoverBurnt(this);
+    updateTerritory(this);
+    if (this.tick % 60 === 59) this.rollFlows();
     // 8. diplomasi ve zafer
     updateDiplomacy(this);
     e.flush();

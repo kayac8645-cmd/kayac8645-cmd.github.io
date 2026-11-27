@@ -5,7 +5,8 @@ import { P32, PRGB, SEASON_MAP, TEAM } from '../data/palette.js';
 import { T, RD, NONE } from '../world/map.js';
 import { hash2, hash2f } from '../core/rng.js';
 
-const CH = 32, TS = 16, CPX = CH * TS;
+export const CHUNK_TILES = 16;
+const CH = CHUNK_TILES, TS = 32, CPX = CH * TS, TM = TS - 1, K = TS / 16; // 32 px karo, 16 karoluk chunk
 const RANK = [0, 0, 1, 3, 3, 2, 4, 5, 6, 3, 0]; // geçiş önceliği (T sırası)
 
 function key(season, k) { const m = SEASON_MAP[season]; return P32[(m && m[k]) || k]; }
@@ -29,16 +30,16 @@ function makePatterns(season) {
   for (let t = 0; t <= 10; t++) {
     const s = spec[t]; const vars = [];
     for (let v = 0; v < 4; v++) {
-      const a = new Uint32Array(256); const base = key(season, s[0]);
-      for (let i = 0; i < 256; i++) {
-        const x = i & 15, y = i >> 4; const r = hash2f(x + v * 16, y + t * 16, 991 + season);
+      const a = new Uint32Array(TS * TS); const base = key(season, s[0]);
+      for (let i = 0; i < TS * TS; i++) {
+        const x = i % TS, y = (i / TS) | 0; const r = hash2f(x + v * TS, y + t * TS, 991 + season);
         a[i] = r < s[2] ? key(season, s[1][(r / s[2] * s[1].length) | 0]) : base;
       }
       const deco = s[3];
-      if (deco === 'tuft') for (let k = 0; k < 3; k++) { const x = hash2(k, v, t) % 14, y = 2 + hash2(v, k, t + 5) % 13; a[y * 16 + x] = key(season, 'g5'); a[(y - 1) * 16 + x] = key(season, 'g4'); if (season === 0 && k === 0) a[y * 16 + x + 1] = P32.l1; }
-      if (deco === 'wave') for (let k = 0; k < 2; k++) { const x = hash2(k, v, t) % 12, y = 2 + hash2(v, k, t + 9) % 12; for (let d = 0; d < 3; d++) a[y * 16 + x + d] = P32.w4; }
-      if (deco === 'crack') for (let k = 0; k < 2; k++) { const x = 2 + hash2(k, v, t) % 11, y = 2 + hash2(v, k, t + 3) % 11; a[y * 16 + x] = P32.r0; a[(y + 1) * 16 + x + 1] = P32.r0; a[(y - 1) * 16 + x] = P32.r3; }
-      if (deco === 'pool') { const x = 3 + hash2(v, 1, t) % 8, y = 3 + hash2(v, 2, t) % 8; for (let dy = 0; dy < 3; dy++) for (let dx = 0; dx < 4; dx++) a[(y + dy) * 16 + x + dx] = P32.w2; }
+      if (deco === 'tuft') for (let k = 0; k < 8; k++) { const x = hash2(k, v, t) % (TS - 2), y = 2 + hash2(v, k, t + 5) % (TS - 3); a[y * TS + x] = key(season, 'g5'); a[(y - 1) * TS + x] = key(season, 'g4'); a[y * TS + x + 1] = key(season, 'g2'); if (season === 0 && k < 2) a[(y - 1) * TS + x + 1] = k ? P32.l1 : P32.k7; }
+      if (deco === 'wave') for (let k = 0; k < 4; k++) { const x = hash2(k, v, t) % (TS - 6), y = 2 + hash2(v, k, t + 9) % (TS - 4); for (let d = 0; d < 5; d++) a[y * TS + x + d] = d === 2 ? P32.w5 : P32.w4; }
+      if (deco === 'crack') for (let k = 0; k < 4; k++) { const x = 2 + hash2(k, v, t) % (TS - 6), y = 2 + hash2(v, k, t + 3) % (TS - 6); for (let d = 0; d < 3; d++) { a[(y + d) * TS + x + d] = P32.r0; a[(y + d - 1) * TS + x + d] = P32.r3; } }
+      if (deco === 'pool') for (let q = 0; q < 2; q++) { const x = 3 + hash2(v, 1 + q, t) % (TS - 10), y = 3 + hash2(v, 2 + q, t) % (TS - 8); for (let dy = 0; dy < 4; dy++) for (let dx = 0; dx < 6; dx++) if ((dx > 0 && dx < 5) || (dy > 0 && dy < 3)) a[(y + dy) * TS + x + dx] = dy === 0 ? P32.w3 : P32.w2; }
       vars.push(a);
     }
     P.push(vars);
@@ -88,7 +89,7 @@ export class TerrainBaker {
       const gx = tx0 + tx, gy = ty0 + ty; if (gx >= W || gy >= H) continue;
       const t = ter[gy * W + gx]; const v = hash2(gx, gy, 77) & 3; const pat = P[t][v];
       const ox = tx * TS, oy = ty * TS;
-      for (let y = 0; y < 16; y++) { const row = (oy + y) * CPX + ox; for (let x = 0; x < 16; x++) buf[row + x] = pat[y * 16 + x]; }
+      for (let y = 0; y < TS; y++) { const row = (oy + y) * CPX + ox; for (let x = 0; x < TS; x++) buf[row + x] = pat[y * TS + x]; }
       // kenar geçişleri: daha yüksek öncelikli komşu bu karonun kenarına taşar
       const r0 = RANK[t];
       for (let d = 0; d < 8; d++) {
@@ -96,13 +97,13 @@ export class TerrainBaker {
         const nt = terAt(gx + ndx, gy + ndy); if (nt === t) continue;
         const nr = RANK[nt]; if (nr <= r0 || nt === T.RIVER) continue;
         const npat = P[nt][(hash2(gx + ndx, gy + ndy, 77) & 3)];
-        for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+        for (let y = 0; y < TS; y++) for (let x = 0; x < TS; x++) {
           let dd;
-          if (d < 4) dd = ndx === 1 ? 15 - x : ndx === -1 ? x : ndy === 1 ? 15 - y : y;
-          else { const ex = ndx === 1 ? 15 - x : x, ey = ndy === 1 ? 15 - y : y; dd = Math.sqrt(ex * ex + ey * ey) * 0.9; }
-          if (dd > 5) continue;
-          const th = (5 - dd) / 6 + (hash2f(gx * 16 + x, gy * 16 + y, 5) - 0.5) * 0.5;
-          if (th > 0.45) buf[(oy + y) * CPX + ox + x] = npat[y * 16 + x];
+          if (d < 4) dd = ndx === 1 ? TM - x : ndx === -1 ? x : ndy === 1 ? TM - y : y;
+          else { const ex = ndx === 1 ? TM - x : x, ey = ndy === 1 ? TM - y : y; dd = Math.sqrt(ex * ex + ey * ey) * 0.9; }
+          dd /= K; if (dd > 5) continue;
+          const th = (5 - dd) / 6 + (hash2f(gx * TS + x, gy * TS + y, 5) - 0.5) * 0.5;
+          if (th > 0.45) buf[(oy + y) * CPX + ox + x] = npat[y * TS + x];
         }
       }
     }
@@ -119,12 +120,12 @@ export class TerrainBaker {
       const gx = tx0 + tx, gy = ty0 + ty; if (gx >= W || gy >= H) continue;
       const s00 = shadeAt(gx, gy), s10 = shadeAt(gx + 1, gy), s01 = shadeAt(gx, gy + 1), s11 = shadeAt(gx + 1, gy + 1);
       if (Math.abs(s00 - 1) < 0.02 && Math.abs(s11 - 1) < 0.02 && Math.abs(s10 - 1) < 0.02) continue;
-      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
-        const fx = x / 16, fy = y / 16; let s = (s00 * (1 - fx) + s10 * fx) * (1 - fy) + (s01 * (1 - fx) + s11 * fx) * fy;
+      for (let y = 0; y < TS; y++) for (let x = 0; x < TS; x++) {
+        const fx = x / TS, fy = y / TS; let s = (s00 * (1 - fx) + s10 * fx) * (1 - fy) + (s01 * (1 - fx) + s11 * fx) * fy;
         // sıralı titreşimle kuantala (piksel sanat bantları)
         s = Math.round((s + (((x ^ y) & 1) ? 0.025 : -0.025)) * 16) / 16;
         if (s === 1) continue;
-        const k = (ty * 16 + y) * CPX + tx * 16 + x; const c = buf[k];
+        const k = (ty * TS + y) * CPX + tx * TS + x; const c = buf[k];
         const r = Math.min(255, (c & 255) * s), g = Math.min(255, ((c >> 8) & 255) * s), b = Math.min(255, ((c >> 16) & 255) * s);
         buf[k] = (0xff000000 | (b << 16) | (g << 8) | r) >>> 0;
       }
@@ -137,17 +138,20 @@ export class TerrainBaker {
         for (let d = 0; d < 4; d++) {
           const nx = gx + [1, -1, 0, 0][d], ny = gy + [0, 0, 1, -1][d];
           if (!map.inb(nx, ny) || !map.isLand(ny * W + nx)) continue;
-          for (let k = 0; k < 16; k++) {
-            const off = (hash2(gx * 16 + k, gy, d + 3) % 3);
-            const x = d === 0 ? 15 - off : d === 1 ? off : k, y = d === 2 ? 15 - off : d === 3 ? off : k;
+          for (let k = 0; k < TS; k++) {
+            const off = (hash2(gx * TS + k, gy, d + 3) % (3 * K));
+            const x = d === 0 ? TM - off : d === 1 ? off : k, y = d === 2 ? TM - off : d === 3 ? off : k;
             const xx = d < 2 ? x : k, yy = d < 2 ? k : y;
-            buf[(oy + yy) * CPX + ox + xx] = off === 0 ? P32.w5 : P32.w4;
+            buf[(oy + yy) * CPX + ox + xx] = off < K ? P32.w5 : P32.w4;
           }
         }
       }
       if (t === T.RIVER) this.drawRiver(gx, gy, ox, oy);
-      if (map.flood[i]) for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) if (((x + y) & 1) || hash2f(x, y, i) < 0.6) buf[(oy + y) * CPX + ox + x] = (x + y) % 5 ? P32.w3 : P32.w4;
-      if (map.res[i] && map.isLand(i) && !map.occ[i] && !map.road[i]) { const h = hash2(gx, gy, 50); this.blit(this.deposits[map.res[i]][h % 3], ox + 2 + (h >> 4) % 3, oy + 3 + (h >> 8) % 3); }
+      if (map.flood[i]) for (let y = 0; y < TS; y++) for (let x = 0; x < TS; x++) if (((x + y) & 1) || hash2f(x, y, i) < 0.6) buf[(oy + y) * CPX + ox + x] = (x + y) % 5 ? P32.w3 : P32.w4;
+      // yatak çizimi: düzensiz, seyrek (ızgara görüntüsü yok)
+      if (map.res[i] && map.isLand(i) && !map.occ[i] && !map.road[i]) { const h = hash2(gx, gy, 50); if ((h & 7) < 4) this.blit(this.deposits[map.res[i]][h % 3], ox + ((h >> 4) % (TS - 20)), oy + ((h >> 9) % (TS - 16))); }
+      // yanık zemin
+      if (map.burnt[i]) { const f = map.burnt[i] / 255; for (let y = 0; y < TS; y++) for (let x = 0; x < TS; x++) { const hv = hash2f(gx * TS + x, gy * TS + y, 17); if (hv < f * 0.95) buf[(oy + y) * CPX + ox + x] = hv < f * 0.3 ? P32.k0 : hv < f * 0.6 ? P32.k1 : P32.b0; } }
     }
     // 4) kraterler / yanık izleri
     const x0 = tx0 - 3, y0 = ty0 - 3, x1 = tx0 + CH + 3, y1 = ty0 + CH + 3;
@@ -178,10 +182,11 @@ export class TerrainBaker {
       const h = hash2(gx, gy, 123);
       if (t === T.FOREST || (t === T.GRASS && (h & 63) < 2) || (t === T.HILL && (h & 31) < 3) || (t === T.SWAMP && (h & 15) < 3)) {
         const T_ = this.trees[season]; const pick = (k) => { const q = k & 7; return q < 4 ? T_.round[q % 3] : q < 7 ? T_.pine[q & 1] : T_.bush[q & 1]; };
-        const ox = tx * TS + ((h >> 12) % 5) - 1, oy = ty * TS + ((h >> 16) % 5) - 4;
+        if (map.burnt[i]) { const st = (h >> 3) % 3; for (let k = 0; k < 2; k++) { const X = tx * TS + 8 + k * 12 + st, Y = ty * TS + 14 + k * 6; for (let yy = 0; yy < 5; yy++) for (let xx = 0; xx < 3; xx++) { const px = X + xx, py = Y + yy; if (px >= 0 && py >= 0 && px < CPX && py < CPX) buf[py * CPX + px] = yy === 0 ? P32.k2 : P32.k0; } } continue; }
+        const ox = tx * TS + ((h >> 12) % 9) - 1, oy = ty * TS + ((h >> 16) % 9) - 6;
         this.blit(pick(h >> 8), ox, oy);
-        if (t === T.FOREST && ((h >> 20) & 1)) this.blit(pick(h >> 22), ox + 6, oy + 6);
-      } else if ((t === T.MOUNTAIN || t === T.PEAK) && (h & 3) === 0) this.drawPeak(tx * TS + 2, ty * TS + 12, t === T.PEAK || season === 3, h);
+        if (t === T.FOREST && ((h >> 20) & 1)) this.blit(pick(h >> 22), ox + 12, oy + 10);
+      } else if ((t === T.MOUNTAIN || t === T.PEAK) && (h & 3) === 0) this.drawPeak(tx * TS + 2, ty * TS + 24, t === T.PEAK || season === 3, h);
     }
     // 7) sınırlar ve cephe hattı
     const own = map.owner;
@@ -192,15 +197,15 @@ export class TerrainBaker {
       for (const [ni, side] of [[i + 1, 0], [i + W, 1], [i - 1, 2], [i - W, 3]]) {
         if (ni < 0 || ni >= map.N) continue; const o2 = own[ni]; if (o2 === o) continue;
         const war = o2 !== NONE && this.warFn(o, o2);
-        for (let k = 0; k < 16; k++) {
-          const on = war ? ((k >> 2) & 1) : (k & 3) < 2;
-          const px = side === 0 ? 15 : side === 2 ? 0 : k, py = side === 1 ? 15 : side === 3 ? 0 : k;
+        for (let k = 0; k < TS; k++) {
+          const on = war ? ((k >> 3) & 1) : (k & 7) < 4;
+          const px = side === 0 ? TM : side === 2 ? 0 : k, py = side === 1 ? TM : side === 3 ? 0 : k;
           const ppx = side === 0 || side === 2 ? px : k, ppy = side === 0 || side === 2 ? k : py;
           if (war) {
             buf[(oy + ppy) * CPX + ox + ppx] = on ? P32.e2 : P32.k7;
             const ix = side === 0 ? ppx - 1 : side === 2 ? ppx + 1 : ppx, iy = side === 1 ? ppy - 1 : side === 3 ? ppy + 1 : ppy;
             buf[(oy + iy) * CPX + ox + ix] = col;
-          } else if (on) buf[(oy + ppy) * CPX + ox + ppx] = col;
+          } else if (on) { buf[(oy + ppy) * CPX + ox + ppx] = col; const ix = side === 0 ? ppx - 1 : side === 2 ? ppx + 1 : ppx, iy = side === 1 ? ppy - 1 : side === 3 ? ppy + 1 : ppy; buf[(oy + iy) * CPX + ox + ix] = col; }
         }
       }
     }
@@ -216,11 +221,11 @@ export class TerrainBaker {
     }
   }
   drawPeak(ox, oy, snow, h) {
-    const buf = this.buf, w = 12, ht = 9 + (h % 4);
+    const buf = this.buf, w = 24, ht = 18 + (h % 6);
     for (let y = 0; y < ht; y++) {
       const half = Math.round((y + 1) * w / 2 / ht);
       for (let x = -half; x <= half; x++) {
-        const X = ox + 6 + x, Y = oy - ht + y; if (X < 0 || Y < 0 || X >= CPX || Y >= CPX) continue;
+        const X = ox + 12 + x, Y = oy - ht + y; if (X < 0 || Y < 0 || X >= CPX || Y >= CPX) continue;
         let c = x < 0 ? P32.r3 : x === 0 ? P32.r2 : P32.r1;
         if (Math.abs(x) === half) c = P32.r0;
         if (snow && y < ht * 0.4) c = x < 0 ? P32.n2 : P32.n0;
@@ -231,24 +236,24 @@ export class TerrainBaker {
   drawRiver(gx, gy, ox, oy) {
     const map = this.map, buf = this.buf, W = map.W;
     const water = (x, y) => map.inb(x, y) && (map.ter[y * W + x] === T.RIVER || map.isWater(y * W + x));
-    const put = (x, y, c) => { if (x >= 0 && y >= 0 && x < 16 && y < 16) buf[(oy + y) * CPX + ox + x] = c; };
-    const disk = (cx, cy, r) => { for (let y = -r - 1; y <= r + 1; y++) for (let x = -r - 1; x <= r + 1; x++) { const d = x * x + y * y; if (d <= r * r) put(cx + x, cy + y, (x + y + gx) % 7 ? P32.w3 : P32.w4); else if (d <= (r + 1) * (r + 1)) { const k = (oy + cy + y) * CPX + ox + cx + x; if (cx + x >= 0 && cy + y >= 0 && cx + x < 16 && cy + y < 16 && buf[k] !== P32.w3 && buf[k] !== P32.w4) buf[k] = P32.b3; } } };
-    disk(8, 8, 4);
+    const put = (x, y, c) => { if (x >= 0 && y >= 0 && x < TS && y < TS) buf[(oy + y) * CPX + ox + x] = c; };
+    const disk = (cx, cy, r) => { for (let y = -r - 1; y <= r + 1; y++) for (let x = -r - 1; x <= r + 1; x++) { const d = x * x + y * y; if (d <= r * r) put(cx + x, cy + y, (x + y + gx) % 7 ? P32.w3 : P32.w4); else if (d <= (r + 1) * (r + 1)) { const k = (oy + cy + y) * CPX + ox + cx + x; if (cx + x >= 0 && cy + y >= 0 && cx + x < TS && cy + y < TS && buf[k] !== P32.w3 && buf[k] !== P32.w4) buf[k] = P32.b3; } } };
+    const hc = TS >> 1, rr = 4 * K; disk(hc, hc, rr);
     for (let d = 0; d < 8; d++) {
       const dx = [1, -1, 0, 0, 1, 1, -1, -1][d], dy = [0, 0, 1, -1, 1, -1, 1, -1][d];
       if (!water(gx + dx, gy + dy)) continue;
       if (d >= 4 && (water(gx + dx, gy) || water(gx, gy + dy))) continue;
-      for (let s = 0; s <= 8; s += 2) disk(8 + dx * s, 8 + dy * s, 4);
+      for (let s = 0; s <= hc; s += 2) disk(hc + dx * s, hc + dy * s, rr);
     }
   }
   drawRoad(gx, gy, ox, oy) {
     const map = this.map, buf = this.buf, W = map.W, r = map.road[gy * W + gx];
     const conn = (x, y, bit) => map.inb(x, y) && (map.road[y * W + x] & bit);
     const put = (x, y, c) => { const X = ox + x, Y = oy + y; if (X >= 0 && Y >= 0 && X < CPX && Y < CPX) buf[Y * CPX + X] = c; };
-    const isBridge = r & RD.BRIDGE, broken = r & RD.BROKEN;
+    const isBridge = r & RD.BRIDGE, broken = r & RD.BROKEN; const hc = TS >> 1;
     for (const bit of [RD.ROAD, RD.RAIL]) {
       if (!(r & bit)) continue;
-      const half = bit === RD.ROAD ? 3 : 2;
+      const half = bit === RD.ROAD ? 6 : 4;
       const arms = [];
       for (let d = 0; d < 8; d++) {
         const dx = [1, -1, 0, 0, 1, 1, -1, -1][d], dy = [0, 0, 1, -1, 1, -1, 1, -1][d];
@@ -258,19 +263,20 @@ export class TerrainBaker {
       }
       const seg = (dx, dy, len) => {
         for (let s = 0; s <= len; s++) for (let w = -half; w <= half; w++) {
-          const x = 8 + dx * s + (dy !== 0 ? w : 0) * (dx === 0 ? 1 : 0.7), y = 8 + dy * s + (dx !== 0 ? w : 0) * (dy === 0 ? 1 : 0.7);
+          const x = hc + dx * s + (dy !== 0 ? w : 0) * (dx === 0 ? 1 : 0.7), y = hc + dy * s + (dx !== 0 ? w : 0) * (dy === 0 ? 1 : 0.7);
           const X = Math.round(x), Y = Math.round(y);
-          if (broken && s > 2 && s < 7 && isBridge) continue;
-          let c;
-          if (bit === RD.ROAD) c = isBridge ? (Math.abs(w) === half ? P32.k3 : P32.c2) : Math.abs(w) === half ? P32.c0 : (w === 0 && (s & 3) < 2 && arms.length <= 2 ? P32.k6 : P32.c1);
-          else c = Math.abs(w) === 1 ? P32.k4 : (s & 1) ? P32.b2 : P32.b1;
+          if (broken && s > 4 && s < 14 && isBridge) continue;
+          const aw = Math.abs(w); let c;
+          if (bit === RD.ROAD) c = isBridge ? (aw >= half - 1 ? (aw === half ? P32.k2 : P32.k4) : P32.c2) : aw === half ? P32.c0 : aw === half - 1 ? P32.c2 : (w === 0 && (s & 7) < 4 && arms.length <= 2 ? P32.k6 : ((s * 7 + w * 3) % 11 === 0 ? P32.c0 : P32.c1));
+          else c = aw === 2 ? P32.k5 : aw === 3 ? P32.k3 : (s & 2) ? P32.b2 : P32.b1;
           put(X, Y, c);
         }
       };
       if (!arms.length) seg(0, 0, 0);
-      for (const [dx, dy] of arms) seg(dx, dy, dx && dy ? 11 : 8);
-      for (let y = -half; y <= half; y++) for (let x = -half; x <= half; x++) put(8 + x, 8 + y, bit === RD.ROAD ? (isBridge ? P32.c2 : P32.c1) : P32.b1);
-      if (broken && isBridge) for (let k = 0; k < 8; k++) { const h = hash2(gx, gy, k); put(4 + (h % 8), 4 + ((h >> 4) % 8), k & 1 ? P32.k2 : P32.b1); }
+      for (const [dx, dy] of arms) seg(dx, dy, dx && dy ? Math.round(TS * 0.7) : hc);
+      for (let y = -half; y <= half; y++) for (let x = -half; x <= half; x++) put(hc + x, hc + y, bit === RD.ROAD ? (isBridge ? P32.c2 : P32.c1) : P32.b1);
+      if (broken && isBridge) for (let k = 0; k < 16; k++) { const h = hash2(gx, gy, k); put(8 + (h % 16), 8 + ((h >> 4) % 16), k & 1 ? P32.k2 : P32.b1); }
     }
   }
+
 }

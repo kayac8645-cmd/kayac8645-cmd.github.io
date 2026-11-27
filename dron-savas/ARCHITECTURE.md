@@ -20,6 +20,10 @@
 | Zafer | Başkent düşerse ülke ilhak edilir; teslimiyet puanı (toprak kaybı, moral, enerji, ordu) 0,7'yi aşarsa teslim olur. Sonda yalnız müttefikler kaldığında ittifaklar dağılır | "Tek kazanan" kuralı |
 | Hava savunma ağı | SAM'in kendi radarı kısa menzillidir. Tam menzil için ağa bağlı (haberleşme) bir radar izi gerekir | "Radar ağı olmadan SAM'ler kör" ilkesi |
 | EH | 6 bant; jammer en fazla 2 bandı (uyarlanır karıştırma tekniğiyle 3) karıştırır ve gözlemlediği banda yaklaşık 160 tick'te uyum sağlar. Fiber dron bağışıktır | Frekans uyum yarışı |
+| Başlangıç (0.17) | `phase='setup'`: oyuncu `FOUND_CAPITAL` ile yer seçer; tüm insanlar yerleşince YZ aday yerlerden en uzak + kaynakça zengin olanlara yerleşir. Kurulumda tick ilerler ama saat işlemez (`setupTicks`) | Lockstep uyumu |
+| Sınır (0.17) | Sahipsiz dünya; şehir yarıçapı nüfusla büyür (üst sınır), çevresi +5 karo sahiplenilir (`sim/territory.js`) | Kullanıcı isteği |
+| Rezerv (0.17) | Yatak kümesi başına çarpık dağılımlı rezerv; birim dönüşümü `RES_UNIT` | Ticaret ihtiyacı |
+| Grafik (0.17) | Karo 32 px; 16 px tasarım `Art(S=2)` ile geometri ölçeklenir, detay yerel çözünürlükte; chunk 16 karo (512 px); zoom<1 genel bakış dokusu | Daha yüksek kalite |
 | Sis seçeneği | `opts.fog=false` iken tüm ülkelerin görüşü tam (YZ dahil); hava hedeflerinin radar algılaması değişmez | Kullanıcı isteği, eşit kural |
 | Savaş sisi | Ülke başına 4×4 karolık hücre ızgarası (son görülme). Kendi toprağı her zaman görünür. İstihbarat belleği `known` haritasında tutulur | YZ hile yapmaz, aynı sise tabidir |
 | Trig | Simülasyonda sin/cos/atan2 yok; yalnız + − × ÷ ve √ | IEEE-754'te motorlar arası deterministik (lockstep) |

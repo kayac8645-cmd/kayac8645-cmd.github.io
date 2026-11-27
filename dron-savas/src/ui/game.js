@@ -17,7 +17,8 @@ import { serialize } from '../sim/serialize.js';
 import { saveGame } from '../core/storage.js';
 import { t } from '../i18n/i18n.js';
 
-const TS = 16;
+const TS = 32;
+const ZOOMS = [1 / 64, 1 / 32, 1 / 16, 1 / 8, 1 / 4, 1 / 2, 1, 2, 3, 4];
 export class Game {
   constructor(app, sim) {
     this.app = app; this.sim = sim; this.player = sim.opts.player ?? 0; this.spectator = !!sim.opts.allAI;
@@ -26,9 +27,11 @@ export class Game {
     this.view.setQuality(app.settings.quality);
     this.speed = 1; this.paused = false; this.acc = 0; this.last = performance.now(); this.mode = null; this.modeData = null;
     this.fps = 60; this.lastAutosave = sim.tick; this.tickMs = 0;
-    this.deposits = computeDeposits(sim.map); this.depSel = -1; this.repeatBuild = false;
+    this.deposits = sim.deposits; this.depSel = -1; // simülasyonun rezervli yatak listesi this.repeatBuild = false;
     const cap = sim.world.countries[this.player]?.capital || { x: sim.map.W / 2, y: sim.map.H / 2 };
-    this.view.cam.x = cap.x * TS; this.view.cam.y = cap.y * TS; this.view.cam.zoom = 3;
+    this.view.cam.x = cap.x * TS; this.view.cam.y = cap.y * TS; this.view.cam.zoom = 2;
+    this.siteSel = null;
+    if (sim.phase === 'setup') { this.view.cam.zoom = this.fitZoom(); this.view.cam.x = sim.map.W * TS / 2; this.view.cam.y = sim.map.H * TS / 2; this.paused = false; } // başkent seçimi: tüm harita
     this.hud = new HUD(this);
     this.input = new Input(app.canvas, {
       pan: (dx, dy) => { const z = this.view.cam.zoom; this.view.cam.x -= dx / z; this.view.cam.y -= dy / z; this.clampCam(); },
@@ -45,15 +48,23 @@ export class Game {
   }
   destroy() { this.running = false; this.hud.destroy(); window.__onBack = null; }
   clampCam() { const c = this.view.cam, m = this.sim.map; c.x = Math.max(0, Math.min(m.W * TS, c.x)); c.y = Math.max(0, Math.min(m.H * TS, c.y)); }
+  // zoom kademeleri: <1 stratejik harita (tüm haritaya kadar), 1..4 piksel detay
+  fitZoom() { const r = this.app.renderer, m = this.sim.map; const need = Math.min(r.W / (m.W * TS), r.H / (m.H * TS)); let z = ZOOMS[0]; for (const q of ZOOMS) if (q <= need) z = q; return z; }
   zoomAt(sx, sy, d) {
-    const c = this.view.cam; const nz = Math.max(1, Math.min(6, c.zoom + d)); if (nz === c.zoom) return;
+    const c = this.view.cam; let k = ZOOMS.indexOf(c.zoom); if (k < 0) k = ZOOMS.findIndex((q) => q >= c.zoom);
+    const nz = ZOOMS[Math.max(ZOOMS.indexOf(this.fitZoom()), Math.min(ZOOMS.length - 1, k + d))]; if (nz === c.zoom) return;
     const [wx, wy] = this.s2w(sx, sy); c.zoom = nz;
+    if (nz === this.fitZoom()) { c.x = this.sim.map.W * TS / 2; c.y = this.sim.map.H * TS / 2; return; } // tüm harita: ortala
     const r = this.app.renderer; c.x = wx * TS - (sx - r.W / 2) / nz; c.y = wy * TS - (sy - r.H / 2) / nz; this.clampCam();
   }
   s2w(sx, sy) { const c = this.view.cam, r = this.app.renderer; return [(c.x + (sx - r.W / 2) / c.zoom) / TS, (c.y + (sy - r.H / 2) / c.zoom) / TS]; }
   w2s(wx, wy) { const c = this.view.cam, r = this.app.renderer; return [(wx * TS - c.x) * c.zoom + r.W / 2, (wy * TS - c.y) * c.zoom + r.H / 2]; }
   jumpTo(x, y) { if (x < 0) return; this.view.cam.x = x * TS; this.view.cam.y = y * TS; this.clampCam(); }
   issue(cmd) { if (this.spectator) return; this.bus.submit({ ...cmd, c: this.player }); this.app.audio.click(); }
+  foundCapital() {
+    const [x, y] = this.siteSel; this.issue({ type: CMD.FOUND_CAPITAL, x, y }); this.siteSel = null;
+    setTimeout(() => { this.jumpTo(x, y); this.view.cam.zoom = 2; this.hud.renderContext(); }, 250);
+  }
   setMode(m, data) { this.mode = m; this.modeData = data || null; if (m !== 'build') this.view.ghost = null; if (!m) { this.view.targetMarker = null; this.view.routeDraft = null; } this.hud.renderContext(); }
 
   frame(now) {
@@ -111,6 +122,7 @@ export class Game {
   tap(sx, sy) {
     this.app.audio.resume();
     const [wx, wy] = this.s2w(sx, sy); const sim = this.sim, e = sim.e;
+    if (sim.phase === 'setup') { this.siteSel = [wx | 0, wy | 0]; this.hud.renderContext(); return; }
     if (this.mode === 'build') {
       const d = this.modeData.def; const bd = BUILDINGS[d]; const x = Math.round(wx - bd.size[0] / 2), y = Math.round(wy - bd.size[1] / 2);
       const g = this.view.ghost;

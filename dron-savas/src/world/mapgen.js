@@ -5,9 +5,10 @@ import { MinHeap } from '../core/math.js';
 import { fbm, ridged, valueNoise } from './noise.js';
 import { GameMap, T, RD, NONE, DX8, DY8 } from './map.js';
 import { countryName, cityName, makeFlag } from './names.js';
+import { computeDeposits } from './deposits.js';
 import { TEAM } from '../data/palette.js';
 
-export const MAP_SIZES = { small: 256, medium: 512, large: 1024 };
+export const MAP_SIZES = { small: 256, medium: 512, large: 1024, huge: 2048 };
 const SEA = 0.40;
 
 export function generateWorld(opts) {
@@ -96,113 +97,31 @@ export function generateWorld(opts) {
       if (valueNoise(x * f, y * f, seed ^ s) > th && valueNoise(x * 0.6, y * 0.6, seed ^ (s * 3)) > 0.4) { map.res[i] = r; break; }
     }
   }
-  // --- ülkeler ---
+  // --- başkent aday yerleri (düz, kara, kıyıdan uzak) ---
   const nC = Math.min(countries, 24);
   const cand = [];
-  for (let tries = 0; tries < 6000 && cand.length < 900; tries++) {
-    const x = 8 + rng.int(W - 16), y = 8 + rng.int(H - 16), i = y * W + x;
+  const tries = Math.max(6000, (N / 40) | 0);
+  for (let k = 0; k < tries && cand.length < 3000; k++) {
+    const x = 10 + rng.int(W - 20), y = 10 + rng.int(H - 20), i = y * W + x;
     if (map.ter[i] !== T.GRASS && map.ter[i] !== T.FOREST) continue;
     let ok = true;
-    for (let dy = -3; dy <= 3 && ok; dy++) for (let dx = -3; dx <= 3; dx++) if (!map.isLand((y + dy) * W + x + dx)) { ok = false; break; }
+    for (let dy = -4; dy <= 4 && ok; dy++) for (let dx = -4; dx <= 4; dx++) if (!map.isLand((y + dy) * W + x + dx)) { ok = false; break; }
     if (ok) cand.push(i);
   }
-  const caps = [];
-  if (cand.length) caps.push(cand[rng.int(cand.length)]);
-  while (caps.length < nC && caps.length < cand.length) { // en uzak nokta örnekleme
-    let best = -1, bd = -1;
-    for (const c of cand) {
-      let md = 1e9; const cx = c % W, cy = (c / W) | 0;
-      for (const k of caps) { const dx = cx - (k % W), dy = cy - ((k / W) | 0); md = Math.min(md, dx * dx + dy * dy); }
-      if (md > bd) { bd = md; best = c; }
-    }
-    caps.push(best);
-  }
-  // toprak: çok kaynaklı Dijkstra
-  const cost = new Float32Array(N).fill(1e9); const own = map.owner;
-  const h2 = new MinHeap(); const closed = new Uint8Array(N);
-  caps.forEach((c, k) => { cost[c] = 0; own[c] = k; h2.push(0, c); });
-  const maxCost = W * 0.55;
-  while (h2.size) {
-    const c = h2.pop(); if (closed[c]) continue; closed[c] = 1; const cc = cost[c]; if (cc > maxCost) continue;
-    const cx = c % W, cy = (c / W) | 0;
-    for (let k = 0; k < 4; k++) {
-      const nx = cx + DX8[k], ny = cy + DY8[k]; if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
-      const ni = ny * W + nx; const t = map.ter[ni];
-      if (t === T.DEEP || t === T.SEA || t === T.LAKE) continue;
-      const step = t === T.MOUNTAIN || t === T.PEAK ? 3 : t === T.RIVER ? 2.5 : t === T.HILL ? 1.6 : 1;
-      const nc = cc + step;
-      if (nc < cost[ni]) { cost[ni] = nc; own[ni] = own[c]; h2.push(nc, ni); }
-    }
-  }
+  // --- ülke kimlikleri (yerleri oyun başında seçilir) ---
   const countryList = [];
-  for (let k = 0; k < caps.length; k++) {
-    const crng = rng.fork(k + 1);
-    const nm = countryName(crng);
-    const c = caps[k];
-    countryList.push({ id: k, name: nm.short, full: nm.full, color: TEAM[k], flag: makeFlag(crng, TEAM[k]), capital: { x: c % W, y: (c / W) | 0, name: cityName(crng) }, towns: [] });
+  for (let k = 0; k < nC; k++) {
+    const crng = rng.fork(k + 1); const nm = countryName(crng);
+    countryList.push({ id: k, name: nm.short, full: nm.full, color: TEAM[k], flag: makeFlag(crng, TEAM[k]), capital: null, capitalName: cityName(crng), cityNames: [0, 1, 2, 3, 4, 5, 6, 7].map(() => cityName(crng)) });
   }
-  // kasabalar
-  for (const co of countryList) {
-    const crng = rng.fork(100 + co.id);
-    const nT = 2 + crng.int(2);
-    for (let t = 0, tries = 0; co.towns.length < nT && tries < 400; tries++) {
-      const r = 12 + crng.int(22); const [dx, dy] = crng.disk();
-      const x = (co.capital.x + dx * r) | 0, y = (co.capital.y + dy * r) | 0;
-      if (!map.inb(x, y)) continue; const i = y * W + x;
-      if (own[i] !== co.id || (map.ter[i] !== T.GRASS && map.ter[i] !== T.FOREST && map.ter[i] !== T.SAND)) continue;
-      if (Math.abs(dx * r) + Math.abs(dy * r) < 10) continue;
-      if (co.towns.some((tw) => Math.abs(tw.x - x) + Math.abs(tw.y - y) < 12)) continue;
-      co.towns.push({ x, y, name: cityName(crng) });
-    }
-    // adalet: başkent yakınında temel kaynak garantisi (demir, kömür, petrol, bakır)
-    for (const r of [1, 2, 3, 5]) ensureDeposit(map, crng, co, r);
-  }
-  // --- yollar ---
-  const bridges = [];
-  const buildRoad = (ax, ay, bx, by) => {
-    const p = map.astar(ax, ay, bx, by, (i) => {
-      const t = map.ter[i];
-      if (map.road[i] & RD.ROAD) return 0.35;
-      if (t === T.DEEP || t === T.SEA || t === T.LAKE || t === T.PEAK) return 0;
-      if (t === T.RIVER) return 6;
-      return t === T.MOUNTAIN ? 6 : t === T.HILL ? 2.2 : t === T.SWAMP ? 3 : t === T.FOREST ? 1.4 : 1;
-    }, 120000);
-    if (!p) return false;
-    for (const i of [ (ay * W + ax), ...p]) {
-      if (!(map.road[i] & RD.ROAD)) {
-        map.road[i] |= RD.ROAD;
-        if (map.ter[i] === T.RIVER) { map.road[i] |= RD.BRIDGE; bridges.push(i); }
-      }
-    }
-    return true;
-  };
-  for (const co of countryList) for (const tw of co.towns) buildRoad(co.capital.x, co.capital.y, tw.x, tw.y);
-  // komşu başkentler arası otoyol (her biri en yakın 2)
-  const linked = new Set();
-  for (const a of countryList) {
-    const near = countryList.filter((b) => b !== a).map((b) => [b, Math.abs(a.capital.x - b.capital.x) + Math.abs(a.capital.y - b.capital.y)]).sort((p, q) => p[1] - q[1]).slice(0, 2);
-    for (const [b] of near) {
-      const key = Math.min(a.id, b.id) + ':' + Math.max(a.id, b.id); if (linked.has(key)) continue; linked.add(key);
-      buildRoad(a.capital.x, a.capital.y, b.capital.x, b.capital.y);
-    }
+  // --- kaynak yatakları: kümeler ve rezervler (bazısı küçük, bazısı büyük -> ticaret) ---
+  const deposits = computeDeposits(map);
+  const BASE = { iron: 900, coal: 1000, oil: 800, gas: 900, copper: 600, uranium: 260, rare: 300 };
+  const drng = rng.fork(9999);
+  for (const d of deposits.list) {
+    const r = drng.next(); const factor = 0.2 + r * r * 3.2; // çarpık dağılım: çoğu küçük, azı dev
+    d.reserve0 = d.reserve = Math.round(d.n * BASE[d.res] * factor);
   }
   map.computeRoadComponents();
-  return { map, countries: countryList, bridges, seed, size };
-}
-
-function ensureDeposit(map, rng, co, r) {
-  const W = map.W; const cx = co.capital.x, cy = co.capital.y;
-  for (let dy = -28; dy <= 28; dy++) for (let dx = -28; dx <= 28; dx++) {
-    const x = cx + dx, y = cy + dy; if (!map.inb(x, y)) continue;
-    const i = y * W + x; if (map.res[i] === r && map.owner[i] === co.id) return;
-  }
-  for (let tries = 0; tries < 300; tries++) {
-    const rr = 6 + rng.int(18); const [dx, dy] = rng.disk();
-    const x = (cx + dx * rr) | 0, y = (cy + dy * rr) | 0; if (!map.inb(x, y)) continue;
-    const i = y * W + x; if (map.owner[i] !== co.id || !map.isLand(i) || map.res[i]) continue;
-    for (let yy = 0; yy < 3; yy++) for (let xx = 0; xx < 3; xx++) {
-      const j = (y + yy) * W + x + xx; if (map.inb(x + xx, y + yy) && map.isLand(j) && rng.chance(0.75)) map.res[j] = r;
-    }
-    return;
-  }
+  return { map, countries: countryList, bridges: [], seed, size, cand, deposits };
 }
